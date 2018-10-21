@@ -19,8 +19,10 @@ scalacOptions ++= Seq(
   "-Ywarn-unused-import",
   "-Ywarn-unused",
 )
-scalacOptions in (Compile, console) ~= (_.filterNot(_ == "-Xfatal-warnings"))
 
-libraryDependencies += "org.ow2.asm" % "asm" % "7.0-beta"
-libraryDependencies += "org.parboiled" %% "parboiled" % "2.1.5"
+libraryDependencies += "org.ow2.asm" % "asm" % "7.0"
+libraryDependencies += "com.lihaoyi" %% "fastparse" % "2.0.4"
+libraryDependencies += "org.apache.commons" % "commons-text" % "1.6"
+
 libraryDependencies += "org.scalatest" %% "scalatest" % "3.0.5" % "test"
+libraryDependencies += "org.ow2.asm" % "asm-util" % "7.0" % "test"

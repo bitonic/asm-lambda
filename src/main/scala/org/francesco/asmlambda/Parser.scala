@@ -1,114 +1,123 @@
 package org.francesco.asmlambda
 
-class Parser(val input: org.parboiled2.ParserInput) extends org.parboiled2.Parser {
-  import org.parboiled2._
-  import shapeless.{::, HNil}
-  import org.francesco.asmlambda.{Syntax => S}
-  import org.francesco.asmlambda.Syntax.{Expr => E}
+import scala.Function.const
 
-  def WS: Rule0 = rule { zeroOrMore(anyOf(" \t \n")) }
+import Syntax.Expr
+import Syntax.{Expr => E}
+import Syntax.Prim
+import Syntax.Definition
+import Syntax.Package
 
-  def tk(s: String): Rule0 = rule { str(s) ~ WS }
-  def tk(c: Char): Rule0 = rule { ch(c) ~ WS }
+import scala.collection.mutable.ArraySeq
+import scala.language.postfixOps
 
-  val reserved: Set[String] = Set("if", "def", "true", "false", "let", "then", "else")
+object Parser {
+  import fastparse._
+  import ScalaWhitespace._
 
-  def Reserved(s: String): Rule0 = {
-    assert(reserved.contains(s), s"$s is not reserved word")
-    rule { tk(s) }
+  def alphaNum[_: P] = P(CharIn("a-z", "A-Z", "0-9"))
+  def alpha[_: P] = P(CharIn("a-z", "A-Z"))
+  def digit[_: P] = P(CharIn("0-9"))
+  def stringChars(c: Char): Boolean = c != '\"' && c != '\\'
+  def strChars[_: P] = P( CharsWhile(stringChars) )
+  def hexDigit[_: P]      = P( CharIn("0-9a-fA-F") )
+  def unicodeEscape[_: P] = P( "u" ~ hexDigit ~ hexDigit ~ hexDigit ~ hexDigit )
+  def escape[_: P]        = P( "\\" ~ (CharIn("\"/\\\\bfnrt") | unicodeEscape) )
+  def string[_: P]: P[String] =
+    "\"" ~/ (strChars | escape).rep.! ~ "\"" /
+
+  def reservedSet: Set[String] = Set("if", "def", "true", "false", "let", "then", "else", "main")
+
+  def recordLabel[_: P]: P[String] = alphaNum.rep(1).!.flatMap(lbl => if (reservedSet.contains(lbl)) { Fail } else { Pass(lbl)})
+
+  def recordLookup[_: P]: P[String] = "." ~~ recordLabel
+
+  def recordLit[_: P]: P[Seq[(String, Expr)]] =
+    "{" ~ (recordLabel ~ "=" ~/ expr).rep(0, ",") ~ "}" /
+
+  def recordUpdate[_: P](rec: Expr): P[Expr] =
+    recordLit.map(_.foldRight(rec) { case ((lbl, body), rec) => E.Update(rec, lbl, body) })
+
+  def variable[_: P]: P[String] =
+    (alpha ~~ alphaNum.rep).!.flatMap(v => if (reservedSet.contains(v)) { Fail } else { Pass(v) })
+
+  def arguments[_: P]: P[ArraySeq[Expr]] =
+    "(" ~ expr1.rep(0, ",").map(args => ArraySeq(args: _*)) ~ ")" /
+
+  def prim[_: P]: P[Prim] =
+    (digit.rep(1) ~~ "." ~~ digit.rep(1)).!.map(i => Prim.F64(i.toDouble)) |
+    digit.rep(1).!.map(i => Prim.I64(i.toLong)) |
+    P("true").map(const(Prim.Bool(true))) |
+    P("false").map(const(Prim.Bool(false))) |
+    string.map(Prim.Text)
+
+  def record[_: P]: P[Map[String, Expr]] = recordLit.map(kvs => Map(kvs: _*))
+
+  def expr6[_: P]: P[Expr] =
+    prim.map(E.Prim) |
+    record.map(E.Record) |
+    variable.map(E.Var) |
+    ("(" ~ expr ~ ")")
+
+  def expr5[_: P]: P[Expr] = {
+    def go(e: Expr): P[Expr] =
+      recordLit.flatMap(upd => go(upd.foldLeft(e){ case (rec, (lbl, body)) => E.Update(rec, lbl, body) })) |
+      arguments.flatMap(args => go(E.App(e, args))) |
+      recordLookup.flatMap(lbl => go(E.Lookup(e, lbl))) |
+      Pass(e)
+    expr6.flatMap(go)
   }
 
-  def RecordLabel: Rule1[String] = rule {
-    capture(oneOrMore(CharPredicate.AlphaNum)) ~ WS
+  def expr4[_: P]: P[Expr] = {
+    def go(e1: Expr): P[Expr] =
+      ("*" ~/ expr5.flatMap(e2 => go(E.mkApp(E.PrimOp.mul, e1, e2)))) |
+      ("/" ~/ expr5.flatMap(e2 => go(E.mkApp(E.PrimOp.div, e1, e2)))) |
+      Pass(e1)
+    expr5.flatMap(go)
   }
 
-  def Lookup: Rule[S.Expr :: HNil, S.Expr :: HNil] = rule {
-    tk('.') ~ RecordLabel ~> E.Lookup
+  def expr3[_: P]: P[Expr] = {
+    def go(e1: Expr): P[Expr] =
+      ("+" ~/ expr4.flatMap(e2 => go(E.mkApp(E.PrimOp.add, e1, e2)))) |
+      ("-" ~/ expr4.flatMap(e2 => go(E.mkApp(E.PrimOp.sub, e1, e2)))) |
+      Pass(e1)
+    expr4.flatMap(go)
   }
 
-  def Variable: Rule1[String] = rule {
-    capture(CharPredicate.Alpha ~ zeroOrMore(CharPredicate.AlphaNum)) ~ WS ~>
-      ((s: String) => test(!reserved.contains(s)) ~ push(s))
+  def `def`[_: P]: P[(String, Definition)] =
+    ("def" ~/ variable ~/ "(" ~/ variable.rep(0, ",") ~/ ")" ~/ "=" ~/ expr ~/ ";")
+      .map{ case (v, args, body) => (v, Definition(ArraySeq(args: _*), body)) }
+  /*
+        case (v, args, body) => if (v == "main") {
+          Pass((v, Definition(ImmArray(args: _*), body)))
+        } else {
+          Fail
+        }
+      }
+      */
+
+  def expr2[_: P]: P[Expr] = {
+    def go(e1: Expr): P[Expr] =
+      ("==" ~/ expr3.flatMap(e2 => go(E.mkApp(E.PrimOp.eq, e1, e2)))) |
+      Pass(e1)
+    expr3.flatMap(go)
   }
 
-  def Argument: Rule1[S.Expr] = rule {
-    Expr5 ~ zeroOrMore(Lookup)
-  }
+  def expr1[_: P]: P[Expr] =
+    ("\\" ~/ "(" ~/ variable.rep(0, ",") ~/ ")" ~/ "->" ~/ expr)
+        .map{ case (args, body) => E.Lam(ArraySeq(args: _*), body) } |
+    ("if" ~/ expr ~/ "then" ~/ expr ~/ "else" ~/ expr)
+        .map{ case (cond, l, r) => E.ITE(cond, l, r) } |
+    ("let" ~/ variable ~/ "=" ~/ expr ~/ ";" ~/ expr)
+        .map{ case (v, bound, body) => E.Let(v, bound, body)} |
+    (`def` ~/ expr).map{ case (v, defn, body) => E.Def(v, defn, body) } |
+    expr2
 
-  def Prim: Rule1[S.Prim] = rule {
-    capture(oneOrMore(CharPredicate.Digit)) ~ WS ~> (i => S.Prim.Int64(i.toLong)) |
-      Reserved("true") ~ push(S.Prim.Bool(true)) |
-      Reserved("false") ~ push(S.Prim.Bool(false))
-      // TODO escaped string
-  }
+  def expr[_: P]: P[Expr] = expr1
 
-  def Record: Rule1[Map[String, S.Expr]] = rule {
-    tk('{') ~
-      oneOrMore(RecordLabel ~ tk('=') ~ Expr ~> ((lbl, e) => (lbl, e))).separatedBy(tk(',')) ~> (
-        kvs => Map(kvs: _*)) ~
-      tk('}')
-  }
+  def exprOnly[_: P]: P[Expr] = Pass(()) ~ expr ~ End
 
-  def PrimOp: Rule1[E.PrimOp] = rule {
-    tk('+') ~ push(E.PrimOp.add) |
-      tk('-') ~ push(E.PrimOp.sub) |
-      tk('*') ~ push(E.PrimOp.mul) |
-      tk('/') ~ push(E.PrimOp.div)
-  }
-
-  def Expr5: Rule1[S.Expr] = rule {
-    Variable ~> E.Var |
-      Prim ~> E.Prim |
-      Record ~> E.Record |
-      (tk('(') ~ Expr ~ tk(')'))
-  }
-
-  def Expr4: Rule1[S.Expr] = rule {
-    Expr5 ~
-      zeroOrMore(Lookup) ~
-      zeroOrMore(Argument ~> E.App)
-  }
-
-  def Expr3: Rule1[S.Expr] = rule {
-    Expr4 ~
-        zeroOrMore(
-          tk('*') ~ Expr4 ~> ((l: S.Expr, r: S.Expr) => E.App(E.App(E.PrimOp.mul, l), r)) |
-          tk('/') ~ Expr4 ~> ((l: S.Expr, r: S.Expr) => E.App(E.App(E.PrimOp.div, l), r)))
-  }
-
-  def Expr2: Rule1[S.Expr] = rule {
-    Expr3 ~
-        zeroOrMore(
-          tk('+') ~ Expr3 ~> ((l: S.Expr, r: S.Expr) => E.App(E.App(E.PrimOp.add, l), r)) |
-          tk('-') ~ Expr3 ~> ((l: S.Expr, r: S.Expr) => E.App(E.App(E.PrimOp.sub, l), r)))
-  }
-
-  def Expr1: Rule1[S.Expr] = rule {
-    tk('\\') ~ oneOrMore(Variable) ~ tk("->") ~ Expr ~> ((vars, body) => vars.foldRight(body)(E.Lam)) |
-    tk("if") ~ Expr ~ tk("then") ~ Expr ~ tk("else") ~ Expr ~> E.ITE |
-    Expr2
-  }
-
-  def LetBindings: Rule1[Seq[(String, S.Expr)]] = rule {
-    zeroOrMore(
-      Reserved("let") ~ Variable ~ tk('=') ~ Expr ~> ((v, bound) => (v, bound)) ~ tk(';'))
-  }
-
-  def Expr0: Rule1[S.Expr] = rule {
-    LetBindings ~ Expr1 ~> (
-        (lets: Seq[(String, S.Expr)], body: S.Expr) =>
-          lets.foldRight(body) { case ((v, bound), body) => E.Let(v, bound, body) })
-  }
-
-  def Expr: Rule1[S.Expr] = Expr0
-
-  def ExprOnly: Rule1[S.Expr] = rule { WS ~ Expr ~ EOI }
-
-  def Def: Rule1[(String, S.Expr)] = rule {
-    Reserved("def") ~ Variable ~ tk('=') ~ Expr ~> ((v, body) => (v, body)) ~ tk(';')
-  }
-
-  def Package: Rule1[S.Package] = rule {
-    WS ~ zeroOrMore(Def) ~> (defs => S.Package(Map(defs: _*))) ~ EOI
+  def `package`[_: P]: P[Package] = Pass(()) ~ (`def`.rep ~ expr ~ End).map{
+    case (defs, e) => Package(Map(defs: _*), e)
   }
 }
