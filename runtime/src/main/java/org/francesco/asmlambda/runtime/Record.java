@@ -1,4 +1,4 @@
-package org.francesco.asmlambda;
+package org.francesco.asmlambda.runtime;
 
 import java.util.HashMap;
 

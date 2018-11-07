@@ -1,10 +1,10 @@
-name := "asm-lambda-scala"
+name := "asm-lambda"
 
-version := "0.1"
+ThisBuild / version := "0.1"
 
-scalaVersion := "2.12.7"
+ThisBuild / scalaVersion := "2.12.7"
 
-scalacOptions ++= Seq(
+ThisBuild / scalacOptions ++= Seq(
   "-feature", // doesn't allow advance features of the language without explict import (higherkinds, implicits)
   "-encoding", "UTF-8",
   "-unchecked", // more detailed information about type-erasure related warnings
@@ -20,9 +20,15 @@ scalacOptions ++= Seq(
   "-Ywarn-unused",
 )
 
-libraryDependencies += "org.ow2.asm" % "asm" % "7.0"
-libraryDependencies += "com.lihaoyi" %% "fastparse" % "2.0.4"
-libraryDependencies += "org.apache.commons" % "commons-text" % "1.6"
+ThisBuild / javacOptions ++= Seq("-source", "10")
 
-libraryDependencies += "org.scalatest" %% "scalatest" % "3.0.5" % "test"
-libraryDependencies += "org.ow2.asm" % "asm-util" % "7.0" % "test"
+lazy val runtime = project in file("runtime")
+
+lazy val compiler = (project in file("compiler"))
+    .settings(
+      libraryDependencies += "org.ow2.asm" % "asm" % "7.0",
+      libraryDependencies += "com.lihaoyi" %% "fastparse" % "2.0.4",
+
+      libraryDependencies += "org.scalatest" %% "scalatest" % "3.0.5" % "test",
+      libraryDependencies += "org.ow2.asm" % "asm-util" % "7.0" % "test")
+    .dependsOn(runtime)

@@ -1,4 +1,4 @@
-package org.francesco.asmlambda
+package org.francesco.asmlambda.compiler
 
 import scala.collection.mutable.ArraySeq
 

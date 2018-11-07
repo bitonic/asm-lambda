@@ -1,4 +1,6 @@
-package org.francesco.asmlambda
+package org.francesco.asmlambda.compiler
+
+import org.francesco.asmlambda.runtime.Record
 
 import scala.language.implicitConversions
 

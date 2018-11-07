@@ -1,6 +1,8 @@
-package org.francesco.asmlambda
+package org.francesco.asmlambda.compiler
 
 import scala.Function.const
+import scala.collection.mutable.ArraySeq
+import scala.language.postfixOps
 
 import Syntax.Expr
 import Syntax.{Expr => E}
@@ -8,27 +10,37 @@ import Syntax.Prim
 import Syntax.Definition
 import Syntax.Package
 
-import scala.collection.mutable.ArraySeq
-import scala.language.postfixOps
-
 object Parser {
   import fastparse._
   import ScalaWhitespace._
 
-  def alphaNum[_: P] = P(CharIn("a-z", "A-Z", "0-9"))
-  def alpha[_: P] = P(CharIn("a-z", "A-Z"))
-  def digit[_: P] = P(CharIn("0-9"))
+  def alphaNum[_: P]: P[Unit] = CharIn("a-zA-Z0-9")
+  def alpha[_: P]: P[Unit] = CharIn("a-zA-Z")
+  def digit[_: P]: P[Unit] = CharIn("0-9")
   def stringChars(c: Char): Boolean = c != '\"' && c != '\\'
-  def strChars[_: P] = P( CharsWhile(stringChars) )
-  def hexDigit[_: P]      = P( CharIn("0-9a-fA-F") )
-  def unicodeEscape[_: P] = P( "u" ~ hexDigit ~ hexDigit ~ hexDigit ~ hexDigit )
-  def escape[_: P]        = P( "\\" ~ (CharIn("\"/\\\\bfnrt") | unicodeEscape) )
+  def strChars[_: P]: P[Unit] = P(CharsWhile(stringChars))
+  def hexDigit[_: P]: P[Unit] =CharIn("0-9a-fA-F")
+
+  def unicodeEscape[_: P]: P[String] =
+    "\\u" ~~ (hexDigit ~~ hexDigit ~~ hexDigit ~~ hexDigit).!
+      .map(i => new String(Character.toChars(Integer.parseInt(i, 16))))
+
+  def escape[_: P]: P[String] =
+    "\\" ~~ CharPred(ch => ch == '"' || ch == '\\' || ch == 'n' || ch == 't').!.map {
+      case "\"" => "\""
+      case "\\" => "\\"
+      case "n" => "\n"
+      case "t" => "\t"
+    }
+
+  // keep in sync with PrimOp.escapeString
   def string[_: P]: P[String] =
-    "\"" ~/ (strChars | escape).rep.! ~ "\"" /
+    "\"" ~~/ (strChars.! | escape | unicodeEscape).repX.map(_.mkString) ~~ "\"" /
 
   def reservedSet: Set[String] = Set("if", "def", "true", "false", "let", "then", "else", "main")
 
-  def recordLabel[_: P]: P[String] = alphaNum.rep(1).!.flatMap(lbl => if (reservedSet.contains(lbl)) { Fail } else { Pass(lbl)})
+  def recordLabel[_: P]: P[String] =
+    alphaNum.repX(1).!.flatMap(lbl => if (reservedSet.contains(lbl)) { Fail } else { Pass(lbl)})
 
   def recordLookup[_: P]: P[String] = "." ~~ recordLabel
 
@@ -39,14 +51,14 @@ object Parser {
     recordLit.map(_.foldRight(rec) { case ((lbl, body), rec) => E.Update(rec, lbl, body) })
 
   def variable[_: P]: P[String] =
-    (alpha ~~ alphaNum.rep).!.flatMap(v => if (reservedSet.contains(v)) { Fail } else { Pass(v) })
+    (alpha ~~ alphaNum.repX).!.flatMap(v => if (reservedSet.contains(v)) { Fail } else { Pass(v) })
 
   def arguments[_: P]: P[ArraySeq[Expr]] =
     "(" ~ expr1.rep(0, ",").map(args => ArraySeq(args: _*)) ~ ")" /
 
   def prim[_: P]: P[Prim] =
-    (digit.rep(1) ~~ "." ~~ digit.rep(1)).!.map(i => Prim.F64(i.toDouble)) |
-    digit.rep(1).!.map(i => Prim.I64(i.toLong)) |
+    (digit.repX(1) ~~ "." ~~ digit.rep(1)).!.map(i => Prim.F64(i.toDouble)) |
+    digit.repX(1).!.map(i => Prim.I64(i.toLong)) |
     P("true").map(const(Prim.Bool(true))) |
     P("false").map(const(Prim.Bool(false))) |
     string.map(Prim.Text)
@@ -87,14 +99,8 @@ object Parser {
   def `def`[_: P]: P[(String, Definition)] =
     ("def" ~/ variable ~/ "(" ~/ variable.rep(0, ",") ~/ ")" ~/ "=" ~/ expr ~/ ";")
       .map{ case (v, args, body) => (v, Definition(ArraySeq(args: _*), body)) }
-  /*
-        case (v, args, body) => if (v == "main") {
-          Pass((v, Definition(ImmArray(args: _*), body)))
-        } else {
-          Fail
-        }
-      }
-      */
+      // TODO adding the above breaks the parser compilation...
+      // .flatMap(defn => if (defn._1 == "main") { Fail } else { Pass(defn) })
 
   def expr2[_: P]: P[Expr] = {
     def go(e1: Expr): P[Expr] =

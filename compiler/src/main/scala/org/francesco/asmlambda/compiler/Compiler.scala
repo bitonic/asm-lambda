@@ -1,12 +1,14 @@
-package org.francesco.asmlambda
+package org.francesco.asmlambda.compiler
 
 import java.lang.invoke.MethodType
 import java.lang.reflect.Method
 
-import org.francesco.asmlambda.{Syntax => S}
-import org.francesco.asmlambda.Syntax.{Expr => SE}
+import org.francesco.asmlambda.compiler.Syntax.{Expr => SE}
+import org.francesco.asmlambda.compiler.{Syntax => S}
+import org.francesco.asmlambda.runtime
 import org.objectweb.asm.{Handle, Label}
 
+import scala.collection.immutable.HashMap
 import scala.collection.mutable
 import scala.collection.mutable.ArraySeq
 import scala.language.reflectiveCalls
@@ -43,7 +45,7 @@ object Rename {
     (newCounters, ArraySeq(reverseVars.reverse: _*))
   }
 
-  def expr(counters: Counters, e: S.Expr): S.Expr =
+  def expr(counters: Counters, e: Syntax.Expr): Syntax.Expr =
     e match {
       case SE.Var(v) => SE.Var(varName(counters, v))
       case SE.Record(fields) => SE.Record(fields.mapValues(expr(counters, _)))
@@ -71,12 +73,12 @@ object Rename {
     * * makes all definition names (global and local) globally unique;
     * * removes all shadowing from let- and lam-bound variables.
     */
-  def definition(counters: Counters, defn: S.Definition): S.Definition = {
+  def definition(counters: Counters, defn: Syntax.Definition): Syntax.Definition = {
     val (newCounters, defnVars) = telescope(counters, defn.args)
     S.Definition(defnVars, expr(newCounters, defn.body))
   }
 
-  def `package`(pkg: S.Package): S.Package = {
+  def `package`(pkg: Syntax.Package): Syntax.Package = {
     // do not shadow definition names, either
     val counters: Counters = Map(pkg.defs.keys.map((_, 0)).toSeq: _*)
     S.Package(pkg.defs.mapValues(definition(counters, _)), expr(counters, pkg.body))
@@ -84,9 +86,9 @@ object Rename {
 }
 
 private sealed class LambdaLift() {
+  import Compiler.{Expr => E, _}
+  import Compiler.Expr
   import LambdaLift._
-  import Compiler._
-  import Compiler.{Expr => E}
 
   val generatedDefnCounters: mutable.Map[String, Int] = mutable.Map.empty
   val definitions: mutable.Map[String, Definition] = mutable.Map.empty
@@ -98,7 +100,7 @@ private sealed class LambdaLift() {
   }
 
   /** returns the new expressions and the free variables therein. */
-  def expr(containingDefn: String, names: Names, e: S.Expr): (Expr, Set[String]) =
+  def expr(containingDefn: String, names: Names, e: Syntax.Expr): (Expr, Set[String]) =
     e match {
       case SE.Var(v) =>
         names(v) match {
@@ -126,7 +128,7 @@ private sealed class LambdaLift() {
         // arg
         val bodyNames = Map(args.map(arg => (arg, Name.Var)).toSeq: _*)
         val (newBody, bodyFreeVars0) = expr(containingDefn, names ++ bodyNames, body)
-        val bodyFreeVars = bodyFreeVars0 &~ Set(args.toSeq: _*)
+        val bodyFreeVars = bodyFreeVars0 &~ Set(args: _*)
         val capturedArgs = ArraySeq(bodyFreeVars.toSeq: _*)
         val defName = newDefinitionName(containingDefn)
         definitions += (defName -> Definition(capturedArgs, args, newBody))
@@ -164,24 +166,21 @@ private sealed class LambdaLift() {
         val (newBody, bodyFreeVars0) = expr(containingDefn, names + (v -> Name.Var), body)
         val bodyFreeVars = bodyFreeVars0 - v
         (E.Let(v, newBound, newBody), boundFreeVars ++ bodyFreeVars)
-      case SE.Def(partialDefName, S.Definition(args, bound), e) =>
+      case SE.Def(partialDefName, Syntax.Definition(args, bound), e) =>
         val defName = containingDefn + ":" + partialDefName
-        val boundNames = Map(args.map(arg => (arg, Name.Var)).toSeq: _*)
+        val boundNames = Map(args.map(arg => (arg, Name.Var)): _*)
         val (newBound, boundFreeVars0) = expr(defName, names ++ boundNames, bound)
-        val boundFreeVars = boundFreeVars0 &~ Set(args.toSeq: _*)
+        val boundFreeVars = boundFreeVars0 &~ Set(args: _*)
         val capturedArgs = ArraySeq(boundFreeVars.toSeq: _*)
         definitions += (defName -> Definition(capturedArgs, args, newBound))
-        expr(
-          containingDefn,
-          names + (partialDefName -> Name.Def(defName, capturedArgs, args.length)),
-          e)
+        expr(containingDefn, names + (partialDefName -> Name.Def(defName, capturedArgs, args.length)), e)
     }
 
   /** names is passed here because it must contain all the other definitions in the package */
-  def definition(defName: String, names: Names, defn: S.Definition): Unit = {
-    val boundNames = Map(defn.args.map(arg => (arg, Name.Var)).toSeq: _*)
+  def definition(defName: String, names: Names, defn: Syntax.Definition): Unit = {
+    val boundNames = Map(defn.args.map(arg => (arg, Name.Var)): _*)
     val (newBound, boundFreeVars0) = expr(defName, names ++ boundNames, defn.body)
-    val boundFreeVars = boundFreeVars0 &~ Set(defn.args.toSeq: _*)
+    val boundFreeVars = boundFreeVars0 &~ Set(defn.args: _*)
     if (boundFreeVars.nonEmpty) {
       sys.error(s"Free variables $boundFreeVars in definition $defName!")
     }
@@ -205,7 +204,7 @@ object LambdaLift {
   }
   private type Names = Map[String, Name]
 
-  def `package`(pkg: S.Package): Package = {
+  def `package`(pkg: Syntax.Package): Package = {
     val ll = new LambdaLift()
     val names0: Map[String, Name] = Map(pkg.defs.toSeq.map {
       case (defName, defn) => (defName, Name.Def(defName, ArraySeq.empty, defn.args.length))
@@ -217,9 +216,9 @@ object LambdaLift {
 }
 
 object Compiler {
-  import org.objectweb.asm.{ClassWriter, Opcodes, MethodVisitor, Type}
-
   import Compiler.{Expr => E}
+  import org.francesco.asmlambda.compiler.{Syntax => S}
+  import org.objectweb.asm.{ClassWriter, MethodVisitor, Opcodes, Type}
 
   sealed trait Expr
   object Expr {
@@ -241,8 +240,8 @@ object Compiler {
     case class StaticCall(defn: String, capturedArgs: ArraySeq[String], args: ArraySeq[Expr])
         extends Expr
     case class DynamicCall(fun: Expr, args: ArraySeq[Expr]) extends Expr
-    case class PrimOpCall(primOp: S.PrimOp, args: ArraySeq[Expr]) extends Expr
-    case class Prim(prim: S.Prim) extends Expr
+    case class PrimOpCall(primOp: Syntax.PrimOp, args: ArraySeq[Expr]) extends Expr
+    case class Prim(prim: Syntax.Prim) extends Expr
     case class ITE(cond: Expr, left: Expr, right: Expr) extends Expr
     case class Let(v: String, bound: Expr, body: Expr) extends Expr
   }
@@ -257,7 +256,7 @@ object Compiler {
   /** get the functional interface for a given arity */
   private[asmlambda] def functionalInterface(argsArity: Int): Class[_] = {
     if (argsArity <= 10 && argsArity >= 0) {
-      val functions = classOf[org.francesco.asmlambda.Functions].getDeclaredClasses
+      val functions = classOf[runtime.Functions].getDeclaredClasses
       functions.filter(_.getName endsWith "Function" + argsArity.toString)(0)
     } else {
       throw new RuntimeException(s"We do not support functions with more than 10 arguments, sorry!")
@@ -328,7 +327,7 @@ object Compiler {
 
       case E.PrimOpCall(pop, args) =>
         compileArguments(locals, args.iterator.map(Argument.Expr))
-        val popClass = classOf[PrimOp]
+        val popClass = classOf[runtime.PrimOp]
         val popMethod = pop match {
           case S.PrimOp.Add => assertSingleMethod(popClass, "add")
           case S.PrimOp.Sub => assertSingleMethod(popClass, "sub")
@@ -364,7 +363,7 @@ object Compiler {
 
       case E.Prim(prim) =>
         prim match {
-          case S.Prim.I64(v) =>
+          case Syntax.Prim.I64(v) =>
             // box the long constant
             methodVisitor.visitLdcInsn(v)
             val longClass = classOf[java.lang.Long]
@@ -375,7 +374,7 @@ object Compiler {
               valueOf.getName,
               Type.getMethodDescriptor(valueOf),
               false)
-          case S.Prim.F64(v) =>
+          case Syntax.Prim.F64(v) =>
             // box the double constant
             methodVisitor.visitLdcInsn(v)
             val doubleClass = classOf[java.lang.Double]
@@ -386,7 +385,7 @@ object Compiler {
               valueOf.getName,
               Type.getMethodDescriptor(valueOf),
               false)
-          case S.Prim.Bool(v) =>
+          case Syntax.Prim.Bool(v) =>
             // box the boolean constant
             methodVisitor.visitLdcInsn(v)
             val booleanClass = classOf[java.lang.Boolean]
@@ -397,7 +396,7 @@ object Compiler {
               valueOf.getName,
               Type.getMethodDescriptor(valueOf),
               false)
-          case S.Prim.Text(s) =>
+          case Syntax.Prim.Text(s) =>
             // push the string directly
             methodVisitor.visitLdcInsn(s)
         }
@@ -446,10 +445,10 @@ object Compiler {
         val end_label = new Label()
         // compile and convert condition to int
         compile(locals, cond)
-        val boolToInt = assertSingleMethod(classOf[PrimOp], "boolToInt")
+        val boolToInt = assertSingleMethod(classOf[runtime.PrimOp], "boolToInt")
         methodVisitor.visitMethodInsn(
           Opcodes.INVOKESTATIC,
-          getAsmClassName(classOf[PrimOp]),
+          getAsmClassName(classOf[runtime.PrimOp]),
           boolToInt.getName,
           Type.getMethodDescriptor(boolToInt),
           false)
@@ -468,7 +467,7 @@ object Compiler {
         // TODO this is probably better done with local variables rather than with the stack only...
         // create record object first -- so that it's going to be already in the right position in
         // the stack
-        val recordClass = classOf[Record]
+        val recordClass = classOf[runtime.Record]
         methodVisitor.visitTypeInsn(Opcodes.NEW, getAsmClassName(recordClass))
         methodVisitor.visitInsn(Opcodes.DUP)
         // then create an empty hashmap
@@ -514,7 +513,7 @@ object Compiler {
         compile(locals, rec)
         methodVisitor.visitLdcInsn(fld)
         compile(locals, body)
-        val popClass = classOf[PrimOp]
+        val popClass = classOf[runtime.PrimOp]
         val updateMethod = assertSingleMethod(popClass, "update")
         methodVisitor.visitMethodInsn(
           Opcodes.INVOKESTATIC,
@@ -526,7 +525,7 @@ object Compiler {
       case E.Lookup(rec, fld) =>
         compile(locals, rec)
         methodVisitor.visitLdcInsn(fld)
-        val popClass = classOf[PrimOp]
+        val popClass = classOf[runtime.PrimOp]
         val lookupMethod = assertSingleMethod(popClass, "lookup")
         methodVisitor.visitMethodInsn(
           Opcodes.INVOKESTATIC,
@@ -561,7 +560,7 @@ object Compiler {
     compileExpr(
       className,
       methodVisitor,
-      Map((defn.capturedArgs.toSeq ++ defn.args.toSeq).zipWithIndex: _*),
+      Map((defn.capturedArgs ++ defn.args).zipWithIndex: _*),
       defn.body)
     methodVisitor.visitInsn(Opcodes.ARETURN)
 
@@ -604,12 +603,24 @@ object Compiler {
 
   def run(className: String, pkg: Package): Object = {
     val bytecode = apply(className, pkg)
-    val classLoader
-      : ClassLoader { def defineClass(name: String, bytecode: Array[Byte]): Class[_] } =
+
+    // setup loader
+    val runtimeClasses = Seq(
+      classOf[org.francesco.asmlambda.runtime.PrimOp],
+      classOf[org.francesco.asmlambda.runtime.PrimOpError],
+      classOf[org.francesco.asmlambda.runtime.Record]) ++
+      (0 to 10).map(functionalInterface)
+    val runtimeClassesMap: HashMap[String, Class[_]] = HashMap(runtimeClasses.map(cls => (cls.getName, cls)): _*)
+    val classLoader: ClassLoader { def defineClass(name: String, bytecode: Array[Byte]): Class[_] } =
       new ClassLoader() {
+        override def findClass(name: String): Class[_] =
+          runtimeClassesMap.getOrElse(name, null)
+
         def defineClass(name: String, bytecode: Array[Byte]): Class[_] =
           defineClass(name, bytecode, 0, bytecode.length)
       }
+
+    // define and run
     val `class` = classLoader.defineClass(className, bytecode)
     val main = `class`.getMethod("main")
     main.invoke(null)

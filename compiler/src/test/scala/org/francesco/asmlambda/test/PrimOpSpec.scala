@@ -1,8 +1,9 @@
 package org.francesco.asmlambda.test
 
 import org.scalatest._
-import org.francesco.asmlambda.PrimOp._
-import org.francesco.asmlambda.Value._
+
+import org.francesco.asmlambda.compiler.Value._
+import org.francesco.asmlambda.runtime.PrimOp.toText
 
 class PrimOpSpec extends FreeSpec with Matchers {
   "toText" - {
@@ -14,8 +15,9 @@ class PrimOpSpec extends FreeSpec with Matchers {
       toText(42.0.getValue) shouldBe "42.0"
     }
 
-    "String" in {
-      toText("blah\"baz".getValue) shouldBe """"blah\"baz""""
+    "Text" in {
+      toText("BEGIN \" \\ \n \t \u0000 \uDCAB \u0012 END".getValue) shouldBe
+          "\"BEGIN \" \\\\ \\n \\t \\u0000 \\uDCAB \\u0012 END\""
     }
 
     "record" - {

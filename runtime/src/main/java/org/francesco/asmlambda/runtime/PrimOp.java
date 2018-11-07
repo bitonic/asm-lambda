@@ -1,10 +1,8 @@
-package org.francesco.asmlambda;
-
-import org.apache.commons.text.StringEscapeUtils;
+package org.francesco.asmlambda.runtime;
 
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.Map;
+import java.util.Set;
 import java.util.Stack;
 
 public final class PrimOp {
@@ -169,7 +167,7 @@ public final class PrimOp {
           stringBuilder.append((Double) value);
         } else if (value instanceof String) {
           stringBuilder.append("\"");
-          stringBuilder.append(StringEscapeUtils.escapeJava((String) value));
+          escapeString(stringBuilder, (String) value);
           stringBuilder.append("\"");
         } else if (value instanceof Boolean) {
           stringBuilder.append((Boolean) value);
@@ -194,6 +192,7 @@ public final class PrimOp {
             }
           }
         } else {
+          // TODO print functions as <function> or something like that.
           throw new PrimOpError("Expected value in toText(), but got " + value.getClass());
         }
 
@@ -209,5 +208,48 @@ public final class PrimOp {
     }
 
     return stringBuilder.toString();
+  }
+
+  private static void escapeCodepoint(StringBuilder stringBuilder, int codePoint) {
+    stringBuilder.append("\\u");
+    stringBuilder.append(String.format("%04X", codePoint));
+  }
+
+  // keep in sync with string parsing in Parser.scala
+  private static void escapeString(StringBuilder stringBuilder, String s) {
+    for (int i = 0; i < s.length(); ) {
+      int codePoint = s.codePointAt(i);
+      char[] chars = Character.toChars(codePoint);
+
+      if (chars.length == 1) {
+        char ch = chars[0];
+
+        switch (ch) {
+          case '\\':
+            stringBuilder.append("\\\\");
+            break;
+          case '\"':
+            stringBuilder.append('"');
+            break;
+          case '\n':
+            stringBuilder.append("\\n");
+            break;
+          case '\t':
+            stringBuilder.append("\\t");
+            break;
+          default:
+            if (ch == ' ' || (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9')) {
+              stringBuilder.append(ch);
+            } else {
+              escapeCodepoint(stringBuilder, codePoint);
+            }
+            break;
+        }
+      } else {
+        escapeCodepoint(stringBuilder, codePoint);
+      }
+
+      i += chars.length;
+    }
   }
 }

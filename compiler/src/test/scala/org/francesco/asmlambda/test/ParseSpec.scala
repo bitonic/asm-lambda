@@ -1,12 +1,13 @@
 package org.francesco.asmlambda.test
 
+import org.francesco.asmlambda.compiler.{Parser, Syntax}
 import org.scalatest._
-import scala.collection.mutable.ArraySeq
 
-import org.francesco.asmlambda.{Parser, Syntax => S}
-import org.francesco.asmlambda.Syntax.Expr
-import org.francesco.asmlambda.Syntax.{Expr => E}
-import org.francesco.asmlambda.Syntax.{Prim => P}
+import scala.collection.mutable.ArraySeq
+import org.francesco.asmlambda.compiler.{Syntax => S}
+import org.francesco.asmlambda.compiler.Syntax.Expr
+import org.francesco.asmlambda.compiler.Syntax.{Expr => E}
+import org.francesco.asmlambda.compiler.Syntax.{Prim => P}
 
 import scala.language.implicitConversions
 
@@ -27,7 +28,7 @@ class ParseSpec extends FreeSpec with Matchers {
 
   def parseExpr(s: String): Expr = assertParse(s, Parser.exprOnly(_))
 
-  def parsePackage(s: String): S.Package = assertParse(s, Parser.`package`(_))
+  def parsePackage(s: String): Syntax.Package = assertParse(s, Parser.`package`(_))
 
   "literal (I64)" in {
     parseExpr("4") shouldBe E.Prim(P.I64(4))
@@ -35,6 +36,10 @@ class ParseSpec extends FreeSpec with Matchers {
 
   "literal (F64)" in {
     parseExpr("4.0") shouldBe E.Prim(P.F64(4.0))
+  }
+
+  "escaped chars" in {
+    parseExpr(""" "BEGIN \" \\ \n \t \u0000 \uDCAB END" """) shouldBe E.Prim(P.Text("BEGIN \" \\ \n \t \u0000 \uDCAB END"))
   }
 
   "record" in {

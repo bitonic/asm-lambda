@@ -1,18 +1,20 @@
 package org.francesco.asmlambda.test
 
-import org.francesco.asmlambda.{LambdaLift, Parser, Rename}
-
+import org.francesco.asmlambda.compiler.{Compiler, LambdaLift, Parser, Rename}
+import org.francesco.asmlambda.compiler.{Syntax => S}
 import java.lang.reflect.InvocationTargetException
+
+import org.francesco.asmlambda.compiler.{LambdaLift, Parser, Rename, Syntax}
 import org.scalatest.{FreeSpec, Matchers}
+
 import scala.collection.mutable.ArraySeq
 import scala.language.implicitConversions
 
 class CompilerSpec extends FreeSpec with Matchers {
   "Rename" - {
-    import org.francesco.asmlambda.{Syntax => S}
-    import org.francesco.asmlambda.Syntax.Expr
-    import org.francesco.asmlambda.Syntax.{Expr => E}
-    import org.francesco.asmlambda.Syntax.{Prim => P}
+    import Syntax.Expr
+    import Syntax.{Expr => E}
+    import Syntax.{Prim => P}
 
     implicit def exprStr(s: String): Expr = fastparse.parse(s, Parser.exprOnly(_)).get.value
 
@@ -63,13 +65,12 @@ class CompilerSpec extends FreeSpec with Matchers {
   }
 
   "LambdaLift" - {
-    import org.francesco.asmlambda.{Syntax => S}
-    import org.francesco.asmlambda.Syntax.{Prim => SP}
-    import org.francesco.asmlambda.Syntax.{PrimOp => SPOP}
-    import org.francesco.asmlambda.Compiler._
-    import org.francesco.asmlambda.Compiler.{Expr => E}
+    import org.francesco.asmlambda.compiler.Syntax.{Prim => SP}
+    import org.francesco.asmlambda.compiler.Syntax.{PrimOp => SPOP}
+    import org.francesco.asmlambda.compiler.Compiler._
+    import org.francesco.asmlambda.compiler.Compiler.{Expr => E}
 
-    implicit def pkgStr(s: String): S.Package = fastparse.parse(s, Parser.`package`(_)).get.value
+    implicit def pkgStr(s: String): Syntax.Package = fastparse.parse(s, Parser.`package`(_)).get.value
 
     "super simple" in {
       LambdaLift.`package`("""
@@ -151,10 +152,11 @@ class CompilerSpec extends FreeSpec with Matchers {
   }
 
   "Compile" - {
-    import org.francesco.asmlambda.{Compiler, Rename, LambdaLift}
-    import org.francesco.asmlambda.Value._
+    import org.francesco.asmlambda.compiler.LambdaLift
+    import org.francesco.asmlambda.compiler.Value._
+    import org.francesco.asmlambda.compiler.Compiler.Package
 
-    implicit def pkgStr(s: String): Compiler.Package =
+    implicit def pkgStr(s: String): Package =
        LambdaLift.`package`(Rename.`package`(fastparse.parse(s, Parser.`package`(_)).get.value))
 
     "methodDescriptor" - {
@@ -171,7 +173,7 @@ class CompilerSpec extends FreeSpec with Matchers {
       }
     }
 
-    def run(pkg: Compiler.Package): Object = {
+    def run(pkg: Package): Object = {
       /*
       import org.objectweb.asm.ClassReader
       import org.objectweb.asm.util.TraceClassVisitor
@@ -182,7 +184,7 @@ class CompilerSpec extends FreeSpec with Matchers {
       println(s"Package: \n$pkg")
       */
 
-      val className = "org.francesco.asmlambda.compiletest.Prim"
+      val className = "org.francesco.asmlambda.test.CompiledPackage"
 
       /*
       val bytecode: Array[Byte] = Compiler(className, pkg)
