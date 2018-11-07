@@ -206,4 +206,7 @@ class ParseSpec extends FreeSpec with Matchers {
     }
   }
 
+  "leq" in {
+    parseExpr("1 <= 2") shouldBe E.mkApp(E.PrimOp.lessEq, 1, 2)
+  }
 }

@@ -114,6 +114,11 @@ object Parser {
   def expr2[_: P]: P[Expr] = {
     def go(e1: Expr): P[Expr] =
       ("==" ~/ expr3.flatMap(e2 => go(E.mkApp(E.PrimOp.eq, e1, e2)))) |
+      (">=" ~/ expr3.flatMap(e2 => go(E.mkApp(E.PrimOp.greaterEq, e1, e2)))) |
+      (">" ~/ expr3.flatMap(e2 => go(E.mkApp(E.PrimOp.greater, e1, e2)))) |
+      ("<=" ~/ expr3.flatMap(e2 => go(E.mkApp(E.PrimOp.lessEq, e1, e2)))) |
+      ("<" ~/ expr3.flatMap(e2 => go(E.mkApp(E.PrimOp.less, e1, e2)))) |
+      ("||" ~/ expr3.flatMap(e2 => go(E.mkApp(E.PrimOp.or, e1, e2)))) |
       Pass(e1)
     expr3.flatMap(go)
   }

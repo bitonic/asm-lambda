@@ -32,3 +32,7 @@ lazy val compiler = (project in file("compiler"))
       libraryDependencies += "org.scalatest" %% "scalatest" % "3.0.5" % "test",
       libraryDependencies += "org.ow2.asm" % "asm-util" % "7.0" % "test")
     .dependsOn(runtime)
+
+lazy val bench = (project in file("bench"))
+    .dependsOn(runtime, compiler)
+    .enablePlugins(JmhPlugin)

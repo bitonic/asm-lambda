@@ -30,6 +30,18 @@ object Syntax {
     case object Eq extends PrimOp {
       val arity = 2
     }
+    case object LessEq extends PrimOp {
+      val arity = 2
+    }
+    case object Less extends PrimOp {
+      val arity = 2
+    }
+    case object Greater extends PrimOp {
+      val arity = 2
+    }
+    case object GreaterEq extends PrimOp {
+      val arity = 2
+    }
     case object ArrayGet extends PrimOp {
       val arity = 2 // array, index
     }
@@ -38,6 +50,9 @@ object Syntax {
     }
     case object ToText extends PrimOp {
       val arity = 1 // any
+    }
+    case object Or extends PrimOp {
+      val arity = 2 // bool, bool
     }
   }
 
@@ -61,8 +76,14 @@ object Syntax {
       val mul = PrimOp(Syntax.PrimOp.Mul)
       val div = PrimOp(Syntax.PrimOp.Div)
       val eq = PrimOp(Syntax.PrimOp.Eq)
+      val less = PrimOp(Syntax.PrimOp.Less)
+      val lessEq = PrimOp(Syntax.PrimOp.LessEq)
+      val greater = PrimOp(Syntax.PrimOp.Greater)
+      val greaterEq = PrimOp(Syntax.PrimOp.GreaterEq)
       val arrGet = PrimOp(Syntax.PrimOp.ArrayGet)
       val arrLen = PrimOp(Syntax.PrimOp.ArrayLen)
+      val toText = PrimOp(Syntax.PrimOp.ToText)
+      val or = PrimOp(Syntax.PrimOp.Or)
     }
     case class ITE(cond: Expr, left: Expr, right: Expr) extends Expr
     case class Let(v: String, bound: Expr, body: Expr) extends Expr

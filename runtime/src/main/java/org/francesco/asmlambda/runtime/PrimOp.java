@@ -56,6 +56,58 @@ public final class PrimOp {
         "Cannot divide operands of type " + e1.getClass() + " and type " + e2.getClass());
   }
 
+  public static Object less(Object e1, Object e2) throws PrimOpError {
+    if (e1 instanceof Long && e2 instanceof Long) {
+      return Boolean.valueOf(((Long) e1) < ((Long) e2));
+    }
+    if (e1 instanceof Double && e2 instanceof Double) {
+      return Boolean.valueOf(((Double) e1) < ((Double) e2));
+    }
+    throw new PrimOpError(
+        "Cannot < operands of type " + e1.getClass() + " and type " + e2.getClass());
+  }
+
+  public static Object lessEq(Object e1, Object e2) throws PrimOpError {
+    if (e1 instanceof Long && e2 instanceof Long) {
+      return Boolean.valueOf(((Long) e1) <= ((Long) e2));
+    }
+    if (e1 instanceof Double && e2 instanceof Double) {
+      return Boolean.valueOf(((Double) e1) <= ((Double) e2));
+    }
+    throw new PrimOpError(
+        "Cannot <= operands of type " + e1.getClass() + " and type " + e2.getClass());
+  }
+
+  public static Object greater(Object e1, Object e2) throws PrimOpError {
+    if (e1 instanceof Long && e2 instanceof Long) {
+      return Boolean.valueOf(((Long) e1) > ((Long) e2));
+    }
+    if (e1 instanceof Double && e2 instanceof Double) {
+      return Boolean.valueOf(((Double) e1) > ((Double) e2));
+    }
+    throw new PrimOpError(
+        "Cannot > operands of type " + e1.getClass() + " and type " + e2.getClass());
+  }
+
+  public static Object greaterEq(Object e1, Object e2) throws PrimOpError {
+    if (e1 instanceof Long && e2 instanceof Long) {
+      return Boolean.valueOf(((Long) e1) >= ((Long) e2));
+    }
+    if (e1 instanceof Double && e2 instanceof Double) {
+      return Boolean.valueOf(((Double) e1) >= ((Double) e2));
+    }
+    throw new PrimOpError(
+        "Cannot >= operands of type " + e1.getClass() + " and type " + e2.getClass());
+  }
+
+  public static Object or(Object e1, Object e2) throws PrimOpError {
+    if (e1 instanceof Boolean && e2 instanceof Boolean) {
+      return Boolean.valueOf(((Boolean) e1) || ((Boolean) e2));
+    }
+    throw new PrimOpError(
+        "Cannot || operands of type " + e1.getClass() + " and type " + e2.getClass());
+  }
+
   public static boolean eqBool(Object e1, Object e2) throws PrimOpError {
     final class Pair {
       final Object fst;

@@ -48,7 +48,11 @@ object Rename {
 
   def expr(counters: Counters, e: Syntax.Expr): Syntax.Expr =
     e match {
-      case SE.Var(v) => SE.Var(varName(counters, v))
+      case SE.Var(v) => v match {
+        case "length" if !counters.contains(v) => SE.PrimOp.arrLen
+        case "toText" if !counters.contains(v) => SE.PrimOp.toText
+        case _ => SE.Var(varName(counters, v))
+      }
       case SE.Record(fields) => SE.Record(fields.mapValues(expr(counters, _)))
       case SE.RecordLookup(rec, fld) => SE.RecordLookup(expr(counters, rec), fld)
       case SE.RecordUpdate(rec, fld, body) => SE.RecordUpdate(expr(counters, rec), fld, expr(counters, body))
@@ -149,8 +153,6 @@ private sealed class LambdaLift() {
         }
         fun match {
           case SE.PrimOp(pop) => (E.PrimOpCall(pop, newArgs), argsFreeVars)
-          case SE.Var("length") => (E.PrimOpCall(S.PrimOp.ArrayLen, newArgs), argsFreeVars)
-          case SE.Var("toText") => (E.PrimOpCall(S.PrimOp.ToText, newArgs), argsFreeVars)
           case SE.Var(v) =>
             names(v) match {
               case Name.Def(defName, capturedArgs, argsArity@_) => // TODO assert argsArity == args
@@ -342,16 +344,22 @@ object Compiler {
       case E.PrimOpCall(pop, args) =>
         compileArguments(locals, args.iterator.map(Argument.Expr))
         val popClass = classOf[runtime.PrimOp]
-        val popMethod = pop match {
-          case S.PrimOp.Add => assertSingleMethod(popClass, "add")
-          case S.PrimOp.Sub => assertSingleMethod(popClass, "sub")
-          case S.PrimOp.Mul => assertSingleMethod(popClass, "mul")
-          case S.PrimOp.Div => assertSingleMethod(popClass, "div")
-          case S.PrimOp.Eq => assertSingleMethod(popClass, "eq")
-          case S.PrimOp.ArrayGet => assertSingleMethod(popClass, "arrayGet")
-          case S.PrimOp.ArrayLen => assertSingleMethod(popClass, "arrayLen")
-          case S.PrimOp.ToText => assertSingleMethod(popClass, "toText")
+        val popName = pop match {
+          case S.PrimOp.Add => "add"
+          case S.PrimOp.Sub => "sub"
+          case S.PrimOp.Mul => "mul"
+          case S.PrimOp.Div => "div"
+          case S.PrimOp.Eq => "eq"
+          case S.PrimOp.ArrayGet => "arrayGet"
+          case S.PrimOp.ArrayLen => "arrayLen"
+          case S.PrimOp.ToText => "toText"
+          case S.PrimOp.Less => "less"
+          case S.PrimOp.LessEq => "lessEq"
+          case S.PrimOp.Greater => "greater"
+          case S.PrimOp.GreaterEq => "greaterEq"
+          case S.PrimOp.Or => "or"
         }
+        val popMethod = assertSingleMethod(popClass, popName)
         val descriptor = Type.getMethodDescriptor(popMethod)
         methodVisitor.visitMethodInsn(
           Opcodes.INVOKESTATIC,
@@ -621,7 +629,7 @@ object Compiler {
 
   /** returns a class file with the compiled bytecode.
     */
-  def apply(className0: String, pkg: Package): Array[Byte] = {
+  def compileToBytecode(className0: String, pkg: Package): Array[Byte] = {
     val className = className0.replace('.', '/')
     val classWriter = new ClassWriter(ClassWriter.COMPUTE_MAXS + ClassWriter.COMPUTE_FRAMES)
 
@@ -649,8 +657,8 @@ object Compiler {
     classWriter.toByteArray
   }
 
-  def run(className: String, pkg: Package): Object = {
-    val bytecode = apply(className, pkg)
+  def compileToFunction(className: String, pkg: Package): Function0[Object] = {
+    val bytecode = compileToBytecode(className, pkg)
 
     // setup loader
     val runtimeClasses = Seq(
@@ -658,7 +666,7 @@ object Compiler {
       classOf[org.francesco.asmlambda.runtime.PrimOpError],
       classOf[org.francesco.asmlambda.runtime.Record],
       classOf[org.francesco.asmlambda.runtime.Array]) ++
-      (0 to 10).map(functionalInterface)
+        (0 to 10).map(functionalInterface)
     val runtimeClassesMap: HashMap[String, Class[_]] = HashMap(runtimeClasses.map(cls => (cls.getName, cls)): _*)
     val classLoader: ClassLoader { def defineClass(name: String, bytecode: Array[Byte]): Class[_] } =
       new ClassLoader() {
@@ -672,6 +680,8 @@ object Compiler {
     // define and run
     val `class` = classLoader.defineClass(className, bytecode)
     val main = `class`.getMethod("main")
-    main.invoke(null)
+    new Function0[Object] { override def apply(): AnyRef = main.invoke(null) }
   }
+
+  def run(className: String, pkg: Package): Object = compileToFunction(className, pkg)()
 }

@@ -16,7 +16,8 @@ class CompilerSpec extends FreeSpec with Matchers {
     import Syntax.{Expr => E}
     import Syntax.{Prim => P}
 
-    implicit def exprStr(s: String): Expr = fastparse.parse(s, Parser.exprOnly(_)).get.value
+    implicit def exprStr(s: String): Expr =
+      fastparse.parse(s, Parser.exprOnly(_)).get.value
 
     "rename in lambda" in {
       Rename.expr(Map.empty, """\(x, x, y, y) -> x(y)""") shouldBe
@@ -149,6 +150,10 @@ class CompilerSpec extends FreeSpec with Matchers {
             ),
             E.Prim(SP.I64(42)))
     }
+
+    "def (loop)" ignore {
+      LambdaLift.`package`("def loop() = def go() = go(); go(); loop()") shouldBe false
+    }
   }
 
   "Compile" - {
@@ -157,7 +162,11 @@ class CompilerSpec extends FreeSpec with Matchers {
     import org.francesco.asmlambda.compiler.Compiler.Package
 
     implicit def pkgStr(s: String): Package =
-       LambdaLift.`package`(Rename.`package`(fastparse.parse(s, Parser.`package`(_)).get.value))
+      fastparse.parse(s, Parser.`package`(_)) match {
+        case fastparse.Parsed.Success(x, _) => LambdaLift.`package`(Rename.`package`(x))
+        case fastparse.Parsed.Failure(_, _, extra) =>
+          sys.error(s"Parse error: ${extra.trace().longAggregateMsg}")
+      }
 
     "methodDescriptor" - {
       "0 arity" in {
@@ -187,7 +196,7 @@ class CompilerSpec extends FreeSpec with Matchers {
       val className = "org.francesco.asmlambda.test.CompiledPackage"
 
       /*
-      val bytecode: Array[Byte] = Compiler(className, pkg)
+      val bytecode: Array[Byte] = Compiler.compileToBytecode(className, pkg)
       val classReader: ClassReader = new ClassReader(bytecode)
       classReader.accept(new TraceClassVisitor(new PrintWriter(System.out)), 0)
       */
@@ -395,6 +404,34 @@ class CompilerSpec extends FreeSpec with Matchers {
       "lookup (both variables)" in {
         run("let arr = [1,2,3]; let ix = 1; arr[ix]") shouldBe 2.getValue
       }
+
+      "length (0)" in {
+        run("length([])") shouldBe 0.getValue
+      }
+
+      "length (1)" in {
+        run("length([1])") shouldBe 1.getValue
+      }
+    }
+
+    "map" in {
+      val pkg =
+        """
+          // we represents nil with [], and cons with [x, xs].
+
+          def isNil(xs) = length(xs) == 0;
+          def head(xs) = xs[0];
+          def tail(xs) = xs[1];
+
+          def map(f, xs) = if isNil(xs)
+            then []
+            else [f(head(xs)), map(f, tail(xs))];
+
+          def square(x) = x * x;
+
+          map(square, [1, [2, [3, []]]])
+        """
+      run(pkg) shouldBe Array(1, Array(4, Array(9, Array()))).getValue
     }
   }
 }
