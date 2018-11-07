@@ -35,7 +35,7 @@ public class Record {
     try {
       return (String) PrimOp.toText(this);
     } catch (PrimOpError e) {
-      throw new RuntimeException("Malformed Records -- got PrimOpError " + e + " in toString()");
+      throw new RuntimeException("Malformed Record -- got PrimOpError " + e + " in toString()");
     }
   }
 }

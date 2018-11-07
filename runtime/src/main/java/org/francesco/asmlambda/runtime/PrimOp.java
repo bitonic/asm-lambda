@@ -16,6 +16,9 @@ public final class PrimOp {
     if (e1 instanceof String && e2 instanceof String) {
       return (String) e1 + (String) e2;
     }
+    if (e1 instanceof Array && e2 instanceof Array) {
+      return ((Array) e1).concat((Array) e2);
+    }
     throw new PrimOpError(
         "Cannot add operands of type " + e1.getClass() + " and type " + e2.getClass());
   }
@@ -80,6 +83,15 @@ public final class PrimOp {
         return l.equals(r);
       } else if (l instanceof Boolean && r instanceof Boolean) {
         return l.equals(r);
+      } else if (l instanceof Array && r instanceof Array) {
+        var arr1 = ((Array) l).getElements();
+        var arr2 = ((Array) r).getElements();
+        if (arr1.length != arr2.length) {
+          return false;
+        }
+        for (var i = 0; i < arr1.length; i++) {
+          toCompare.push(new Pair(arr1[i], arr2[i]));
+        }
       } else if (l instanceof Record && r instanceof Record) {
         var rec1 = ((Record) l).getElements();
         var rec2 = ((Record) r).getElements();
@@ -115,7 +127,7 @@ public final class PrimOp {
     throw new PrimOpError("Expected boolean, got " + e.getClass());
   }
 
-  public static Object lookup(Object rec0, String k) throws PrimOpError {
+  public static Object recordLookup(Object rec0, String k) throws PrimOpError {
     if (rec0 instanceof Record) {
       Record rec = (Record) rec0;
       Object v = rec.getElements().get(k);
@@ -125,18 +137,38 @@ public final class PrimOp {
         throw new PrimOpError("Could not find key " + k + " in record " + rec.toString());
       }
     }
-    throw new PrimOpError("Expected Record for lookup, got " + rec0.getClass());
+    throw new PrimOpError("Expected Record for record lookup, got " + rec0.getClass());
   }
 
-  public static Object update(Object rec0, String k, Object v) throws PrimOpError {
+  public static Object recordUpdate(Object rec0, String k, Object v) throws PrimOpError {
     if (rec0 instanceof Record) {
       Record rec = (Record) rec0;
       return rec.update(k, v);
     }
-    throw new PrimOpError("Expected Record for lookup, got " + rec0.getClass());
+    throw new PrimOpError("Expected Record for record update, got " + rec0.getClass());
   }
 
-  private enum ToTextInstruction {VALUE, RECORD_VALUE, RECORD_LAST_VALUE, RECORD_END }
+  public static Object arrayGet(Object arr0, Object ix0) throws PrimOpError {
+    if (arr0 instanceof Array && ix0 instanceof Long) {
+      return ((Array) arr0).getElements()[((int) (long) ix0)];
+    }
+    throw new PrimOpError("Expected Array and record for array get, got " + arr0.getClass() + " and " + ix0.getClass());
+  }
+
+  public static Object arrayLen(Object arr0) throws PrimOpError {
+    if (arr0 instanceof Array) {
+      return Long.valueOf(((Array) arr0).getElements().length);
+    }
+    throw new PrimOpError("Expected Array for array length, got " + arr0.getClass());
+  }
+
+  private enum ToTextInstruction {
+    VALUE,
+    RECORD_VALUE,
+    COMMA,
+    RECORD_END,
+    ARRAY_END,
+  }
 
   public static Object toText(Object e0) throws PrimOpError {
     var instructions = new Stack<ToTextInstruction>();
@@ -150,9 +182,9 @@ public final class PrimOp {
     while (!instructions.empty()) {
       var instruction = instructions.pop();
 
-      if (instruction == ToTextInstruction.VALUE || instruction == ToTextInstruction.RECORD_VALUE || instruction == ToTextInstruction.RECORD_LAST_VALUE) {
+      if (instruction == ToTextInstruction.VALUE || instruction == ToTextInstruction.RECORD_VALUE) {
         // if this is a record value, first emit the label
-        if (instruction == ToTextInstruction.RECORD_VALUE || instruction == ToTextInstruction.RECORD_LAST_VALUE) {
+        if (instruction == ToTextInstruction.RECORD_VALUE) {
           var label = recordLabels.pop();
           stringBuilder.append(label);
           stringBuilder.append(" = ");
@@ -171,6 +203,21 @@ public final class PrimOp {
           stringBuilder.append("\"");
         } else if (value instanceof Boolean) {
           stringBuilder.append((Boolean) value);
+        } else if (value instanceof Array) {
+          var arr = ((Array) value).getElements();
+          if (arr.length == 0) {
+            stringBuilder.append("[]");
+          } else {
+            stringBuilder.append("[");
+            instructions.push(ToTextInstruction.ARRAY_END);
+            instructions.push(ToTextInstruction.VALUE);
+            values.push(arr[arr.length - 1]);
+            for (int i = arr.length - 2; i >= 0; i--) {
+              instructions.push(ToTextInstruction.COMMA);
+              instructions.push(ToTextInstruction.VALUE);
+              values.push(arr[i]);
+            }
+          }
         } else if (value instanceof Record) {
           HashMap<String, Object> rec = ((Record) value).getElements();
           // if the record is empty, just emit it
@@ -182,10 +229,11 @@ public final class PrimOp {
             String[] keys = rec.keySet().toArray(new String[0]);
             Arrays.sort(keys); // stable printing
             var last_key = keys[keys.length - 1];
-            instructions.push(ToTextInstruction.RECORD_LAST_VALUE);
+            instructions.push(ToTextInstruction.RECORD_VALUE);
             recordLabels.push(last_key);
             values.push(rec.get(last_key));
             for (int i = keys.length - 2; i >= 0; i--) {
+              instructions.push(ToTextInstruction.COMMA);
               instructions.push(ToTextInstruction.RECORD_VALUE);
               recordLabels.push(keys[i]);
               values.push(rec.get(keys[i]));
@@ -195,15 +243,16 @@ public final class PrimOp {
           // TODO print functions as <function> or something like that.
           throw new PrimOpError("Expected value in toText(), but got " + value.getClass());
         }
-
-        // if it's a record value, but _not_ the last one, print the comma
-        if (instruction == ToTextInstruction.RECORD_VALUE) {
-          stringBuilder.append(", ");
-        }
       }
 
       if (instruction == ToTextInstruction.RECORD_END) {
         stringBuilder.append("}");
+      }
+      if (instruction == ToTextInstruction.ARRAY_END) {
+        stringBuilder.append("]");
+      }
+      if (instruction == ToTextInstruction.COMMA) {
+        stringBuilder.append(", ");
       }
     }
 

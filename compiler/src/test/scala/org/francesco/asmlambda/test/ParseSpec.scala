@@ -48,19 +48,19 @@ class ParseSpec extends FreeSpec with Matchers {
   }
 
   "lookup (var head)" in {
-    parseExpr("x.foo") shouldBe E.Lookup("x", "foo")
+    parseExpr("x.foo") shouldBe E.RecordLookup("x", "foo")
   }
 
   "lookup (record head)" in {
-    parseExpr("{x = true}.x") shouldBe E.Lookup(E.Record(Map("x" -> true)), "x")
+    parseExpr("{x = true}.x") shouldBe E.RecordLookup(E.Record(Map("x" -> true)), "x")
   }
 
   "update (var)" in {
-    parseExpr("x{foo = bar, blah = baz}") shouldBe E.Update(E.Update("x", "foo", "bar"), "blah", "baz")
+    parseExpr("x{foo = bar, blah = baz}") shouldBe E.RecordUpdate(E.RecordUpdate("x", "foo", "bar"), "blah", "baz")
   }
 
   "update (app)" in {
-    parseExpr("a(b{foo = bar})") shouldBe E.mkApp("a", E.Update("b", "foo", "bar"))
+    parseExpr("a(b{foo = bar})") shouldBe E.mkApp("a", E.RecordUpdate("b", "foo", "bar"))
   }
 
   "application (all vars)" in {
@@ -182,6 +182,28 @@ class ParseSpec extends FreeSpec with Matchers {
           E.PrimOp.sub,
           E.mkApp(E.PrimOp.add, E.mkApp(E.PrimOp.mul, "a", "b"), E.mkApp(E.PrimOp.div, "c", "d")),
           E.mkApp(E.PrimOp.mul, "e", "f")))
+  }
+
+  "array" - {
+    "empty" in {
+      parseExpr("[]") shouldBe E.mkArray()
+    }
+
+    "1" in {
+      parseExpr("[42]") shouldBe E.mkArray(42)
+    }
+
+    "2" in {
+      parseExpr("[{}, true]") shouldBe E.mkArray(E.mkRecord(), true)
+    }
+
+    "lookup var" in {
+      parseExpr("x[0]") shouldBe E.mkApp(E.PrimOp.arrGet, "x", 0)
+    }
+
+    "lookup it" in {
+      parseExpr("[1, 2, 3][x]") shouldBe E.mkApp(E.PrimOp.arrGet, E.mkArray(1, 2, 3), "x")
+    }
   }
 
 }

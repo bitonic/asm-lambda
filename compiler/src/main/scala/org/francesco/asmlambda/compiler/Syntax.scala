@@ -30,14 +30,26 @@ object Syntax {
     case object Eq extends PrimOp {
       val arity = 2
     }
+    case object ArrayGet extends PrimOp {
+      val arity = 2 // array, index
+    }
+    case object ArrayLen extends PrimOp {
+      val arity = 1 // array
+    }
+    case object ToText extends PrimOp {
+      val arity = 1 // any
+    }
   }
 
   sealed trait Expr
   object Expr {
     case class Var(v: String) extends Expr
     case class Record(fields: Map[String, Expr]) extends Expr
-    case class Lookup(rec: Expr, field: String) extends Expr
-    case class Update(rec: Expr, field: String, body: Expr) extends Expr
+    def mkRecord(fields: (String, Expr)*): Expr = Record(Map(fields: _*))
+    case class RecordLookup(rec: Expr, field: String) extends Expr
+    case class RecordUpdate(rec: Expr, field: String, body: Expr) extends Expr
+    case class Array(elements: ArraySeq[Expr]) extends Expr
+    def mkArray(els: Expr*): Expr = Array(ArraySeq(els: _*))
     case class Lam(args: ArraySeq[String], body: Expr) extends Expr
     case class App(fun: Expr, args: ArraySeq[Expr]) extends Expr
     def mkApp(fun: Expr, args: Expr*): Expr = App(fun, ArraySeq(args: _*))
@@ -49,6 +61,8 @@ object Syntax {
       val mul = PrimOp(Syntax.PrimOp.Mul)
       val div = PrimOp(Syntax.PrimOp.Div)
       val eq = PrimOp(Syntax.PrimOp.Eq)
+      val arrGet = PrimOp(Syntax.PrimOp.ArrayGet)
+      val arrLen = PrimOp(Syntax.PrimOp.ArrayLen)
     }
     case class ITE(cond: Expr, left: Expr, right: Expr) extends Expr
     case class Let(v: String, bound: Expr, body: Expr) extends Expr

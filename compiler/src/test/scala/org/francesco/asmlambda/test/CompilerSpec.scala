@@ -366,5 +366,35 @@ class CompilerSpec extends FreeSpec with Matchers {
         run("""{foo = 1}.foo""") shouldBe 1.getValue
       }
     }
+
+    "array" - {
+      "0" in {
+        run("[]") shouldBe Array().getValue
+      }
+
+      "1" in {
+        run("[1]") shouldBe Array(1).getValue
+      }
+
+      "2" in {
+        run("[1, {foo = true}]") shouldBe Array(1, Record("foo" -> true)).getValue
+      }
+
+      "lookup (both literals)" in {
+        run("[1,2,3][1]") shouldBe 2.getValue
+      }
+
+      "lookup (index variable)" in {
+        run("let ix = 1; [1,2,3][ix]") shouldBe 2.getValue
+      }
+
+      "lookup (array variable)" in {
+        run("let arr = [1,2,3]; arr[1]") shouldBe 2.getValue
+      }
+
+      "lookup (both variables)" in {
+        run("let arr = [1,2,3]; let ix = 1; arr[ix]") shouldBe 2.getValue
+      }
+    }
   }
 }

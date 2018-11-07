@@ -13,8 +13,9 @@ import scala.collection.mutable
 import scala.collection.mutable.ArraySeq
 import scala.language.reflectiveCalls
 
-/** Scope checks an expression and prepares it for compilation. right now this just means
-  * removing any kind of shadowing.
+/** Scope checks an expression and prepares it for compilation:
+  *
+  * * Remove shadowing
   */
 object Rename {
   type Counters = Map[String, Int]
@@ -49,8 +50,8 @@ object Rename {
     e match {
       case SE.Var(v) => SE.Var(varName(counters, v))
       case SE.Record(fields) => SE.Record(fields.mapValues(expr(counters, _)))
-      case SE.Lookup(rec, fld) => SE.Lookup(expr(counters, rec), fld)
-      case SE.Update(rec, fld, body) => SE.Update(expr(counters, rec), fld, expr(counters, body))
+      case SE.RecordLookup(rec, fld) => SE.RecordLookup(expr(counters, rec), fld)
+      case SE.RecordUpdate(rec, fld, body) => SE.RecordUpdate(expr(counters, rec), fld, expr(counters, body))
       case SE.Lam(args, body) =>
         val (newCounters, newArgs) = telescope(counters, args)
         SE.Lam(newArgs, expr(newCounters, body))
@@ -67,6 +68,8 @@ object Rename {
         val newDefn = definition(counters, defn)
         val (newCounters, newV) = bumpVar(counters, v)
         SE.Def(newV, newDefn, expr(newCounters, body))
+      case SE.Array(elems) =>
+        SE.Array(elems.map(expr(counters, _)))
     }
 
   /** does two things:
@@ -116,13 +119,13 @@ private sealed class LambdaLift() {
               (newFlds + (lbl -> newFldBody), freeVars ++ fldBodyVars)
           }
         (E.Record(newFlds), freeVars)
-      case SE.Lookup(rec, lbl) =>
+      case SE.RecordLookup(rec, lbl) =>
         val (newRec, freeVars) = expr(containingDefn, names, rec)
-        (E.Lookup(newRec, lbl), freeVars)
-      case SE.Update(rec, fld, body) =>
+        (E.RecordLookup(newRec, lbl), freeVars)
+      case SE.RecordUpdate(rec, fld, body) =>
         val (newRec, freeVars1) = expr(containingDefn, names, rec)
         val (newBody, freeVars2) = expr(containingDefn, names, body)
-        (E.Update(newRec, fld, newBody), freeVars1 ++ freeVars2)
+        (E.RecordUpdate(newRec, fld, newBody), freeVars1 ++ freeVars2)
       case SE.Lam(args, body) =>
         // create a new definition with on the fly with all the free variables of the body as captured
         // arg
@@ -146,6 +149,8 @@ private sealed class LambdaLift() {
         }
         fun match {
           case SE.PrimOp(pop) => (E.PrimOpCall(pop, newArgs), argsFreeVars)
+          case SE.Var("length") => (E.PrimOpCall(S.PrimOp.ArrayLen, newArgs), argsFreeVars)
+          case SE.Var("toText") => (E.PrimOpCall(S.PrimOp.ToText, newArgs), argsFreeVars)
           case SE.Var(v) =>
             names(v) match {
               case Name.Def(defName, capturedArgs, argsArity@_) => // TODO assert argsArity == args
@@ -174,6 +179,14 @@ private sealed class LambdaLift() {
         val capturedArgs = ArraySeq(boundFreeVars.toSeq: _*)
         definitions += (defName -> Definition(capturedArgs, args, newBound))
         expr(containingDefn, names + (partialDefName -> Name.Def(defName, capturedArgs, args.length)), e)
+      case SE.Array(elems) =>
+        var freeVars = Set[String]()
+        val newElems = elems.map{ elem =>
+          val res = expr(containingDefn, names, elem)
+          freeVars ++= res._2
+          res._1
+        }
+        (E.Array(newElems), freeVars)
     }
 
   /** names is passed here because it must contain all the other definitions in the package */
@@ -235,8 +248,9 @@ object Compiler {
       */
     case class Def(defName: String, capturedArgs: ArraySeq[String], argsArity: Int) extends Expr
     case class Record(fields: Map[String, Expr]) extends Expr
-    case class Lookup(rec: Expr, field: String) extends Expr
-    case class Update(rec: Expr, field: String, body: Expr) extends Expr
+    case class RecordLookup(rec: Expr, field: String) extends Expr
+    case class RecordUpdate(rec: Expr, field: String, body: Expr) extends Expr
+    case class Array(elems: ArraySeq[Expr]) extends Expr
     case class StaticCall(defn: String, capturedArgs: ArraySeq[String], args: ArraySeq[Expr])
         extends Expr
     case class DynamicCall(fun: Expr, args: ArraySeq[Expr]) extends Expr
@@ -334,6 +348,9 @@ object Compiler {
           case S.PrimOp.Mul => assertSingleMethod(popClass, "mul")
           case S.PrimOp.Div => assertSingleMethod(popClass, "div")
           case S.PrimOp.Eq => assertSingleMethod(popClass, "eq")
+          case S.PrimOp.ArrayGet => assertSingleMethod(popClass, "arrayGet")
+          case S.PrimOp.ArrayLen => assertSingleMethod(popClass, "arrayLen")
+          case S.PrimOp.ToText => assertSingleMethod(popClass, "toText")
         }
         val descriptor = Type.getMethodDescriptor(popMethod)
         methodVisitor.visitMethodInsn(
@@ -509,12 +526,12 @@ object Compiler {
           Type.getConstructorDescriptor(recordConstructor),
           false)
 
-      case E.Update(rec, fld, body) =>
+      case E.RecordUpdate(rec, fld, body) =>
         compile(locals, rec)
         methodVisitor.visitLdcInsn(fld)
         compile(locals, body)
         val popClass = classOf[runtime.PrimOp]
-        val updateMethod = assertSingleMethod(popClass, "update")
+        val updateMethod = assertSingleMethod(popClass, "recordUpdate")
         methodVisitor.visitMethodInsn(
           Opcodes.INVOKESTATIC,
           getAsmClassName(popClass),
@@ -522,16 +539,47 @@ object Compiler {
           Type.getMethodDescriptor(updateMethod),
           false)
 
-      case E.Lookup(rec, fld) =>
+      case E.RecordLookup(rec, fld) =>
         compile(locals, rec)
         methodVisitor.visitLdcInsn(fld)
         val popClass = classOf[runtime.PrimOp]
-        val lookupMethod = assertSingleMethod(popClass, "lookup")
+        val lookupMethod = assertSingleMethod(popClass, "recordLookup")
         methodVisitor.visitMethodInsn(
           Opcodes.INVOKESTATIC,
           getAsmClassName(popClass),
           lookupMethod.getName,
           Type.getMethodDescriptor(lookupMethod),
+          false)
+
+      case E.Array(elems) =>
+        // TODO this is probably better done with local variables rather than with the stack only...
+        // create array object first -- so that it's going to be already in the right position in
+        // the stack
+        val arrayClass = classOf[runtime.Array]
+        methodVisitor.visitTypeInsn(Opcodes.NEW, getAsmClassName(arrayClass))
+        methodVisitor.visitInsn(Opcodes.DUP)
+        // push array len on the stack
+        methodVisitor.visitLdcInsn(elems.length)
+        // create array
+        methodVisitor.visitTypeInsn(Opcodes.ANEWARRAY, getAsmClassName(classOf[Object]))
+        // poke all elements in
+        elems.zipWithIndex.foreach { case (elem, ix) =>
+          // save a copy of the array for later
+          methodVisitor.visitInsn(Opcodes.DUP)
+          // push the index
+          methodVisitor.visitLdcInsn(ix)
+          // evaluate expression
+          compile(locals, elem)
+          // poke it in
+          methodVisitor.visitInsn(Opcodes.AASTORE)
+        }
+        // finally, invoke the array constructor
+        val arrayConstructor = arrayClass.getConstructor(classOf[Array[Object]])
+        methodVisitor.visitMethodInsn(
+          Opcodes.INVOKESPECIAL,
+          getAsmClassName(arrayClass),
+          "<init>",
+          Type.getConstructorDescriptor(arrayConstructor),
           false)
     }
   }
@@ -608,7 +656,8 @@ object Compiler {
     val runtimeClasses = Seq(
       classOf[org.francesco.asmlambda.runtime.PrimOp],
       classOf[org.francesco.asmlambda.runtime.PrimOpError],
-      classOf[org.francesco.asmlambda.runtime.Record]) ++
+      classOf[org.francesco.asmlambda.runtime.Record],
+      classOf[org.francesco.asmlambda.runtime.Array]) ++
       (0 to 10).map(functionalInterface)
     val runtimeClassesMap: HashMap[String, Class[_]] = HashMap(runtimeClasses.map(cls => (cls.getName, cls)): _*)
     val classLoader: ClassLoader { def defineClass(name: String, bytecode: Array[Byte]): Class[_] } =

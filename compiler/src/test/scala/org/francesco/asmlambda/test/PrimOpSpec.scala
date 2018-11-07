@@ -34,8 +34,22 @@ class PrimOpSpec extends FreeSpec with Matchers {
       }
 
       "nested" in {
-        toText(Record("foo" -> Record("bar" -> 1, "baz" -> 2), "blah" -> true).getValue) shouldBe
-          "{blah = true, foo = {bar = 1, baz = 2}}"
+        toText(Record("foo" -> Array(1, Record("bar" -> 1, "baz" -> 2), 2), "blah" -> true).getValue) shouldBe
+          "{blah = true, foo = [1, {bar = 1, baz = 2}, 2]}"
+      }
+    }
+
+    "array" - {
+      "0" in {
+        toText(Array().getValue) shouldBe "[]"
+      }
+
+      "1" in {
+        toText(Array(1).getValue) shouldBe "[1]"
+      }
+
+      "2" in {
+        toText(Array(1, 2).getValue) shouldBe "[1, 2]"
       }
     }
   }

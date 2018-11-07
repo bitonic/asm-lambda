@@ -1,6 +1,6 @@
 package org.francesco.asmlambda.compiler
 
-import org.francesco.asmlambda.runtime.Record
+import org.francesco.asmlambda.runtime.{Record, Array}
 
 import scala.language.implicitConversions
 
@@ -18,5 +18,8 @@ object Value {
       elements.put(el._1, el._2.getValue)
     }
     Value(new Record(elements))
+  }
+  def Array(els: Value*): Value = {
+    Value(new Array(els.map(_.getValue).toArray))
   }
 }

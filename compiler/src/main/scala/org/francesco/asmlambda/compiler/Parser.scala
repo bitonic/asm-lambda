@@ -48,7 +48,7 @@ object Parser {
     "{" ~ (recordLabel ~ "=" ~/ expr).rep(0, ",") ~ "}" /
 
   def recordUpdate[_: P](rec: Expr): P[Expr] =
-    recordLit.map(_.foldRight(rec) { case ((lbl, body), rec) => E.Update(rec, lbl, body) })
+    recordLit.map(_.foldRight(rec) { case ((lbl, body), rec) => E.RecordUpdate(rec, lbl, body) })
 
   def variable[_: P]: P[String] =
     (alpha ~~ alphaNum.repX).!.flatMap(v => if (reservedSet.contains(v)) { Fail } else { Pass(v) })
@@ -65,17 +65,26 @@ object Parser {
 
   def record[_: P]: P[Map[String, Expr]] = recordLit.map(kvs => Map(kvs: _*))
 
+  def array[_: P]: P[Seq[Expr]] =
+    "[" ~/ expr.rep(0, ",") ~ "]" /
+
   def expr6[_: P]: P[Expr] =
     prim.map(E.Prim) |
     record.map(E.Record) |
+    array.map(els => E.Array(ArraySeq(els: _*))) |
     variable.map(E.Var) |
     ("(" ~ expr ~ ")")
 
+  def arrayGet[_: P]: P[Expr] = {
+    "[" ~/ expr ~ "]" /
+  }
+
   def expr5[_: P]: P[Expr] = {
     def go(e: Expr): P[Expr] =
-      recordLit.flatMap(upd => go(upd.foldLeft(e){ case (rec, (lbl, body)) => E.Update(rec, lbl, body) })) |
+      recordLit.flatMap(upd => go(upd.foldLeft(e){ case (rec, (lbl, body)) => E.RecordUpdate(rec, lbl, body) })) |
       arguments.flatMap(args => go(E.App(e, args))) |
-      recordLookup.flatMap(lbl => go(E.Lookup(e, lbl))) |
+      recordLookup.flatMap(lbl => go(E.RecordLookup(e, lbl))) |
+      arrayGet.flatMap(ix => go(E.mkApp(E.PrimOp.arrGet, e, ix))) |
       Pass(e)
     expr6.flatMap(go)
   }
