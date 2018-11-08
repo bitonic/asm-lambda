@@ -51,6 +51,8 @@ object Rename {
       case SE.Var(v) => v match {
         case "length" if !counters.contains(v) => SE.PrimOp.arrLen
         case "toText" if !counters.contains(v) => SE.PrimOp.toText
+        case "car" if !counters.contains(v) => SE.PrimOp.car
+        case "cdr" if !counters.contains(v) => SE.PrimOp.cdr
         case _ => SE.Var(varName(counters, v))
       }
       case SE.Record(fields) => SE.Record(fields.mapValues(expr(counters, _)))
@@ -74,6 +76,8 @@ object Rename {
         SE.Def(newV, newDefn, expr(newCounters, body))
       case SE.Array(elems) =>
         SE.Array(elems.map(expr(counters, _)))
+      case SE.Cons(car, cdr) =>
+        SE.Cons(expr(counters, car), expr(counters, cdr))
     }
 
   /** does two things:
@@ -189,6 +193,10 @@ private sealed class LambdaLift() {
           res._1
         }
         (E.Array(newElems), freeVars)
+      case SE.Cons(car, cdr) =>
+        val (newCar, freeVarsCar) = expr(containingDefn, names, car)
+        val (newCdr, freeVarsCdr) = expr(containingDefn, names, cdr)
+        (E.Cons(newCar, newCdr), freeVarsCar ++ freeVarsCdr)
     }
 
   /** names is passed here because it must contain all the other definitions in the package */
@@ -243,7 +251,6 @@ object Compiler {
       * [[Def]] or [[StaticCall]].
       */
     case class Var(v: String) extends Expr
-
     /** reference to a def (originally local or global). note that we
       * still need this beyond [[StaticCall]] because people might
       * reference them as functions.
@@ -260,6 +267,7 @@ object Compiler {
     case class Prim(prim: Syntax.Prim) extends Expr
     case class ITE(cond: Expr, left: Expr, right: Expr) extends Expr
     case class Let(v: String, bound: Expr, body: Expr) extends Expr
+    case class Cons(car: Expr, cdr: Expr) extends Expr
   }
 
   case class Definition(capturedArgs: ArraySeq[String], args: ArraySeq[String], body: Expr)
@@ -350,14 +358,16 @@ object Compiler {
           case S.PrimOp.Mul => "mul"
           case S.PrimOp.Div => "div"
           case S.PrimOp.Eq => "eq"
-          case S.PrimOp.ArrayGet => "arrayGet"
-          case S.PrimOp.ArrayLen => "arrayLen"
+          case S.PrimOp.ArrayGet => "arrGet"
+          case S.PrimOp.ArrayLen => "arrLen"
           case S.PrimOp.ToText => "toText"
           case S.PrimOp.Less => "less"
           case S.PrimOp.LessEq => "lessEq"
           case S.PrimOp.Greater => "greater"
           case S.PrimOp.GreaterEq => "greaterEq"
           case S.PrimOp.Or => "or"
+          case S.PrimOp.Car => "consCar"
+          case S.PrimOp.Cdr => "consCdr"
         }
         val popMethod = assertSingleMethod(popClass, popName)
         val descriptor = Type.getMethodDescriptor(popMethod)
@@ -424,6 +434,14 @@ object Compiler {
           case Syntax.Prim.Text(s) =>
             // push the string directly
             methodVisitor.visitLdcInsn(s)
+          case Syntax.Prim.Nil =>
+            val nilClass = classOf[runtime.Nil]
+            val nilField = nilClass.getField("nil")
+            methodVisitor.visitFieldInsn(
+              Opcodes.GETSTATIC,
+              getAsmClassName(nilClass),
+              nilField.getName,
+              Type.getDescriptor(nilClass))
         }
 
       case E.Def(defn, capturedArgs, argsArity) =>
@@ -470,12 +488,12 @@ object Compiler {
         val end_label = new Label()
         // compile and convert condition to int
         compile(locals, cond)
-        val boolToInt = assertSingleMethod(classOf[runtime.PrimOp], "boolToInt")
+        val truthyToInt = assertSingleMethod(classOf[runtime.PrimOp], "truthyToInt")
         methodVisitor.visitMethodInsn(
           Opcodes.INVOKESTATIC,
           getAsmClassName(classOf[runtime.PrimOp]),
-          boolToInt.getName,
-          Type.getMethodDescriptor(boolToInt),
+          truthyToInt.getName,
+          Type.getMethodDescriptor(truthyToInt),
           false)
         // jump if 0 (false)
         methodVisitor.visitJumpInsn(Opcodes.IFEQ, r_label)
@@ -611,6 +629,20 @@ object Compiler {
           "<init>",
           Type.getConstructorDescriptor(arrayConstructor),
           false)
+
+      case E.Cons(car, cdr) =>
+        val consClass = classOf[runtime.Cons]
+        methodVisitor.visitTypeInsn(Opcodes.NEW, getAsmClassName(consClass))
+        methodVisitor.visitInsn(Opcodes.DUP)
+        compile(locals, car)
+        compile(locals, cdr)
+        val consConstructor = consClass.getConstructor(classOf[Object], classOf[Object])
+        methodVisitor.visitMethodInsn(
+          Opcodes.INVOKESPECIAL,
+          getAsmClassName(consClass),
+          "<init>",
+          Type.getConstructorDescriptor(consConstructor),
+          false)
     }
   }
 
@@ -687,7 +719,9 @@ object Compiler {
       classOf[org.francesco.asmlambda.runtime.PrimOp],
       classOf[org.francesco.asmlambda.runtime.PrimOpError],
       classOf[org.francesco.asmlambda.runtime.Record],
-      classOf[org.francesco.asmlambda.runtime.Array]) ++
+      classOf[org.francesco.asmlambda.runtime.Array],
+      classOf[org.francesco.asmlambda.runtime.Nil],
+      classOf[org.francesco.asmlambda.runtime.Cons]) ++
         (0 to 10).map(functionalInterface)
     val runtimeClassesMap: HashMap[String, Class[_]] = HashMap(runtimeClasses.map(cls => (cls.getName, cls)): _*)
     val classLoader: ClassLoader { def defineClass(name: String, bytecode: Array[Byte]): Class[_] } =

@@ -433,5 +433,27 @@ class CompilerSpec extends FreeSpec with Matchers {
         """
       run(pkg) shouldBe Array(1, Array(4, Array(9, Array()))).getValue
     }
+
+    "cons" - {
+      "nil" in {
+        run("[]") shouldBe Nil.getValue
+      }
+
+      "pair" in {
+        run("42 :: true") shouldBe Cons(42, true).getValue
+      }
+
+      "list" in {
+        run("""[42, true, "x"]""") shouldBe List(42, true, "x").getValue
+      }
+
+      "car" in {
+        run("car(42 :: true)") shouldBe 42.getValue
+      }
+
+      "cdr" in {
+        run("cdr(42 :: true)") shouldBe true.getValue
+      }
+    }
   }
 }

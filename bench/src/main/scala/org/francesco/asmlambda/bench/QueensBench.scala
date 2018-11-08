@@ -11,76 +11,71 @@ object QueensBench {
     val run: () => Unit = {
       val source =
         """
-        // we use [] for nil, [x, xs] for cons
+          def isNil(xs) = if xs then false else true; // [] is falsy, :: is truthy. yay lisp
 
-        def isNil(xs) = length(xs) == 0;
+          def map(f, xs) = if isNil(xs)
+            then []
+            else f(car(xs)) :: map(f, cdr(xs));
 
-        def head(xs) = xs[0];
-        def tail(xs) = xs[1];
+          def append(xs, ys) = if isNil(xs)
+            then ys
+            else car(xs) :: append(cdr(xs), ys);
 
-        def map(f, xs) = if isNil(xs)
-          then []
-          else [f(head(xs)), map(f, tail(xs))];
+          def concatMap(f, xs) = if isNil(xs)
+            then xs
+            else append(f(car(xs)), concatMap(f, cdr(xs)));
 
-        def append(xs, ys) = if isNil(xs)
-          then ys
-          else [head(xs), append(tail(xs), ys)];
+          def zipWith(f, xs, ys) = if isNil(xs) || isNil(ys)
+            then []
+            else
+              f(car(xs), car(ys)) :: zipWith(f, cdr(xs), cdr(ys));
 
-        def concatMap(f, xs) = if isNil(xs)
-          then xs
-          else append(f(head(xs)), concatMap(f, tail(xs)));
+          def replicate(n, x) = if n <= 0
+            then []
+            else x :: replicate(n - 1, x);
 
-        def zipWith(f, xs, ys) = if isNil(xs) || isNil(ys)
-          then []
-          else
-            [f(head(xs), head(ys)), zipWith(f, tail(xs), tail(ys))];
+          def listLength(xs) = if isNil(xs)
+            then 0
+            else 1 + listLength(cdr(xs));
 
-        def replicate(n, x) = if n <= 0
-          then []
-          else [x, replicate(n - 1, x)];
+          def diff(xs, ys) = if isNil(xs)
+            then []
+            else
+              if isNil(ys)
+                then xs
+                else
+                  let x = car(xs);
+                  let y = car(ys);
+                  if x < y
+                    then x :: diff(cdr(xs), ys)
+                    else if x == y
+                      then diff(cdr(xs), cdr(ys))
+                      else diff(xs, cdr(ys));
 
-        def listLength(xs) = if isNil(xs)
-          then 0
-          else 1 + listLength(tail(xs));
+          def range(m, n) = if m <= n
+            then m :: range(m + 1, n)
+            else [];
 
-        def diff(xs, ys) = if isNil(xs)
-          then []
-          else
-            if isNil(ys)
-              then xs
-              else
-                let x = head(xs);
-                let y = head(ys);
-                if x < y
-                  then [x, diff(tail(xs), ys)]
-                  else if x == y
-                    then diff(tail(xs), tail(ys))
-                    else diff(xs, tail(ys));
+          def solveAux(ints, kss) = if isNil(kss)
+            then [[]]
+            else concatMap(
+              \(k) ->
+                map(
+                  \(t) -> k :: t,
+                  solveAux(
+                    ints,
+                    zipWith(
+                      \(ls, i) -> diff(ls, [k-i, k, k+i]),
+                      cdr(kss),
+                      ints))),
+              car(kss));
 
-        def range(m, n) = if m <= n
-          then [m, range(m + 1, n)]
-          else [];
+          def solve(n) =
+            let ints = range(1, n);
+            solveAux(ints, replicate(n, ints));
 
-        def solveAux(ints, kss) = if isNil(kss)
-          then [[], []]
-          else concatMap(
-            \(k) ->
-              map(
-                \(t) -> [k, t],
-                solveAux(
-                  ints,
-                  zipWith(
-                    \(ls, i) -> diff(ls, [k-i, [k, [k+i, []]]]),
-                    tail(kss),
-                    ints))),
-            head(kss));
-
-        def solve(n) =
-          let ints = range(1, n);
-          solveAux(ints, replicate(n, ints));
-
-        listLength(solve(10))
-      """
+          listLength(solve(10))
+        """
       val pkg = LambdaLift.`package`(
         Rename.`package`(fastparse.parse(source, Parser.`package`(_)).get.value))
       val run = Compiler.compileToFunction("org.francesco.asmlambda.bench.Queens", pkg)
@@ -128,7 +123,7 @@ class QueensBench {
         ks.flatMap(k =>
           solveAux(
             ints,
-            (kss, ints).zipped map { case (ls, i) => diff(ls, k-i :: k :: k+i :: Nil) }).map(k :: _))
+            (kss, ints).zipped map { case (ls, i) => diff(ls, List(k-i, k, k+i)) }).map(k :: _))
     }
 
     def solve(n: Int): List[List[Int]] = {

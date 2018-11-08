@@ -2,7 +2,6 @@ package org.francesco.asmlambda.runtime;
 
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.Set;
 import java.util.Stack;
 
 public final class PrimOp {
@@ -128,13 +127,20 @@ public final class PrimOp {
       var r = pair.snd;
 
       if (l instanceof Long && r instanceof Long) {
-        return l.equals(r);
+        if (!l.equals(r)) return false;
       } else if (l instanceof Double && r instanceof Double) {
-        return l.equals(r);
+        if (!l.equals(r)) return false;
       } else if (l instanceof String && r instanceof String) {
-        return l.equals(r);
+        if (!l.equals(r)) return false;
       } else if (l instanceof Boolean && r instanceof Boolean) {
-        return l.equals(r);
+        if (!l.equals(r)) return false;
+      } else if (l instanceof Nil && r instanceof Nil) {
+        // no op
+      } else if (l instanceof Cons && r instanceof Cons) {
+        var c1 = (Cons) l;
+        var c2 = (Cons) r;
+        toCompare.push(new Pair(c1.car, c2.car));
+        toCompare.push(new Pair(c1.car, c2.car));
       } else if (l instanceof Array && r instanceof Array) {
         var arr1 = ((Array) l).getElements();
         var arr2 = ((Array) r).getElements();
@@ -172,11 +178,17 @@ public final class PrimOp {
     return eqBool(e1, e2);
   }
 
-  public static int boolToInt(Object e) throws PrimOpError {
+  public static int truthyToInt(Object e) throws PrimOpError {
     if (e instanceof Boolean) {
       return ((Boolean) e) ? 1 : 0;
     }
-    throw new PrimOpError("Expected boolean, got " + e.getClass());
+    if (e instanceof Nil) {
+      return 0;
+    }
+    if (e instanceof Cons) {
+      return 1;
+    }
+    throw new PrimOpError("Expected boolean, nil, or cons cell for truthyToInt, got " + e.getClass());
   }
 
   public static Object recordLookup(Object rec0, String k) throws PrimOpError {
@@ -214,12 +226,27 @@ public final class PrimOp {
     throw new PrimOpError("Expected Array for array length, got " + arr0.getClass());
   }
 
+  public static Object consCar(Object cons) throws PrimOpError {
+    if (cons instanceof Cons) {
+      return ((Cons) cons).car;
+    }
+    throw new PrimOpError("Expected cons for cons car, got " + cons.getClass());
+  }
+
+  public static Object consCdr(Object cons) throws PrimOpError {
+    if (cons instanceof Cons) {
+      return ((Cons) cons).cdr;
+    }
+    throw new PrimOpError("Expected cons for cons cdr, got " + cons.getClass());
+  }
+
   private enum ToTextInstruction {
     VALUE,
     RECORD_VALUE,
     COMMA,
-    RECORD_END,
-    ARRAY_END,
+    CLOSE_BRACE,
+    CLOSE_BRACKET,
+    CLOSE_PARENS,
   }
 
   public static Object toText(Object e0) throws PrimOpError {
@@ -255,13 +282,24 @@ public final class PrimOp {
           stringBuilder.append("\"");
         } else if (value instanceof Boolean) {
           stringBuilder.append((Boolean) value);
+        } else if (value instanceof Cons) {
+          var cons = (Cons) value;
+          stringBuilder.append("Cons(");
+          instructions.push(ToTextInstruction.CLOSE_PARENS);
+          instructions.push(ToTextInstruction.VALUE);
+          values.push(cons.cdr);
+          instructions.push(ToTextInstruction.COMMA);
+          instructions.push(ToTextInstruction.VALUE);
+          values.push(cons.car);
+        } else if (value instanceof Nil) {
+          stringBuilder.append("Nil");
         } else if (value instanceof Array) {
           var arr = ((Array) value).getElements();
           if (arr.length == 0) {
-            stringBuilder.append("[]");
+            stringBuilder.append("#[]");
           } else {
-            stringBuilder.append("[");
-            instructions.push(ToTextInstruction.ARRAY_END);
+            stringBuilder.append("#[");
+            instructions.push(ToTextInstruction.CLOSE_BRACKET);
             instructions.push(ToTextInstruction.VALUE);
             values.push(arr[arr.length - 1]);
             for (int i = arr.length - 2; i >= 0; i--) {
@@ -277,7 +315,7 @@ public final class PrimOp {
             stringBuilder.append("{}");
           } else {
             stringBuilder.append("{");
-            instructions.push(ToTextInstruction.RECORD_END);
+            instructions.push(ToTextInstruction.CLOSE_BRACE);
             String[] keys = rec.keySet().toArray(new String[0]);
             Arrays.sort(keys); // stable printing
             var last_key = keys[keys.length - 1];
@@ -297,11 +335,14 @@ public final class PrimOp {
         }
       }
 
-      if (instruction == ToTextInstruction.RECORD_END) {
+      if (instruction == ToTextInstruction.CLOSE_BRACE) {
         stringBuilder.append("}");
       }
-      if (instruction == ToTextInstruction.ARRAY_END) {
+      if (instruction == ToTextInstruction.CLOSE_BRACKET) {
         stringBuilder.append("]");
+      }
+      if (instruction == ToTextInstruction.CLOSE_PARENS) {
+        stringBuilder.append(")");
       }
       if (instruction == ToTextInstruction.COMMA) {
         stringBuilder.append(", ");

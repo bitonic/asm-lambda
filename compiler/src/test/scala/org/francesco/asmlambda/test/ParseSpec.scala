@@ -186,15 +186,15 @@ class ParseSpec extends FreeSpec with Matchers {
 
   "array" - {
     "empty" in {
-      parseExpr("[]") shouldBe E.mkArray()
+      parseExpr("#[]") shouldBe E.mkArray()
     }
 
     "1" in {
-      parseExpr("[42]") shouldBe E.mkArray(42)
+      parseExpr("#[42]") shouldBe E.mkArray(42)
     }
 
     "2" in {
-      parseExpr("[{}, true]") shouldBe E.mkArray(E.mkRecord(), true)
+      parseExpr("#[{}, true]") shouldBe E.mkArray(E.mkRecord(), true)
     }
 
     "lookup var" in {
@@ -202,11 +202,25 @@ class ParseSpec extends FreeSpec with Matchers {
     }
 
     "lookup it" in {
-      parseExpr("[1, 2, 3][x]") shouldBe E.mkApp(E.PrimOp.arrGet, E.mkArray(1, 2, 3), "x")
+      parseExpr("#[1, 2, 3][x]") shouldBe E.mkApp(E.PrimOp.arrGet, E.mkArray(1, 2, 3), "x")
     }
   }
 
   "leq" in {
     parseExpr("1 <= 2") shouldBe E.mkApp(E.PrimOp.lessEq, 1, 2)
+  }
+
+  "cons" - {
+    "empty" in {
+      parseExpr("[]") shouldBe E.Prim(P.Nil)
+    }
+
+    "cons" in {
+      parseExpr("a :: b") shouldBe E.Cons("a", "b")
+    }
+
+    "list" in {
+      parseExpr("[a, b, c]") shouldBe E.mkList("a", "b", "c")
+    }
   }
 }

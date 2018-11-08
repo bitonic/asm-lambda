@@ -9,6 +9,7 @@ object Syntax {
     case class F64(v: Double) extends Prim
     case class Text(v: String) extends Prim
     case class Bool(v: Boolean) extends Prim
+    case object Nil extends Prim
   }
 
   sealed trait PrimOp {
@@ -54,6 +55,12 @@ object Syntax {
     case object Or extends PrimOp {
       val arity = 2 // bool, bool
     }
+    case object Car extends PrimOp {
+      val arity = 1 // cons
+    }
+    case object Cdr extends PrimOp {
+      val arity = 1 // cons
+    }
   }
 
   sealed trait Expr
@@ -84,10 +91,14 @@ object Syntax {
       val arrLen = PrimOp(Syntax.PrimOp.ArrayLen)
       val toText = PrimOp(Syntax.PrimOp.ToText)
       val or = PrimOp(Syntax.PrimOp.Or)
+      val car = PrimOp(Syntax.PrimOp.Car)
+      val cdr = PrimOp(Syntax.PrimOp.Cdr)
     }
     case class ITE(cond: Expr, left: Expr, right: Expr) extends Expr
     case class Let(v: String, bound: Expr, body: Expr) extends Expr
     case class Def(defName: String, bound: Definition, body: Expr) extends Expr
+    case class Cons(car: Expr, cdr: Expr) extends Expr
+    def mkList(els: Expr*): Expr = els.foldRight[Expr](Prim(Syntax.Prim.Nil)){ case (car, cdr) => Cons(car, cdr) }
   }
 
   case class Definition(args: ArraySeq[String], body: Expr)

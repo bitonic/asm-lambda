@@ -1,6 +1,6 @@
 package org.francesco.asmlambda.compiler
 
-import org.francesco.asmlambda.runtime.{Record, Array}
+import org.francesco.asmlambda.runtime
 
 import scala.language.implicitConversions
 
@@ -17,9 +17,12 @@ object Value {
     for (el <- els) {
       elements.put(el._1, el._2.getValue)
     }
-    Value(new Record(elements))
+    Value(new runtime.Record(elements))
   }
   def Array(els: Value*): Value = {
-    Value(new Array(els.map(_.getValue).toArray))
+    Value(new runtime.Array(els.map(_.getValue).toArray))
   }
+  def Nil: Value = Value(runtime.Nil.nil)
+  def Cons(car: Value, cdr: Value): Value = Value(new runtime.Cons(car.getValue, cdr.getValue))
+  def List(els: Value*): Value = els.foldRight(Nil){ case (car, cdr) => Cons(car, cdr) }
 }

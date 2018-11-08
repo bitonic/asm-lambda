@@ -66,12 +66,17 @@ object Parser {
   def record[_: P]: P[Map[String, Expr]] = recordLit.map(kvs => Map(kvs: _*))
 
   def array[_: P]: P[Seq[Expr]] =
-    "[" ~/ expr.rep(0, ",") ~ "]" /
+    "#[" ~/ expr.rep(0, ",") ~ "]" /
+
+  def list[_: P]: P[Expr] =
+    ("[" ~/ expr.rep(0, ",") ~ "]" /)
+        .map(els => els.foldRight[Expr](E.Prim(Prim.Nil)){ case (car, cdr) => E.Cons(car, cdr) })
 
   def expr6[_: P]: P[Expr] =
     prim.map(E.Prim) |
     record.map(E.Record) |
     array.map(els => E.Array(ArraySeq(els: _*))) |
+    list |
     variable.map(E.Var) |
     ("(" ~ expr ~ ")")
 
@@ -119,6 +124,7 @@ object Parser {
       ("<=" ~/ expr3.flatMap(e2 => go(E.mkApp(E.PrimOp.lessEq, e1, e2)))) |
       ("<" ~/ expr3.flatMap(e2 => go(E.mkApp(E.PrimOp.less, e1, e2)))) |
       ("||" ~/ expr3.flatMap(e2 => go(E.mkApp(E.PrimOp.or, e1, e2)))) |
+      ("::" ~/ expr3.flatMap(e2 => go(E.Cons(e1, e2)))) |
       Pass(e1)
     expr3.flatMap(go)
   }
