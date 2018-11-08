@@ -3,9 +3,7 @@ package org.francesco.asmlambda.runtime;
 public class Array {
   private Object[] elements;
 
-  public Array(Object[] elements) {
-    this.elements = elements;
-  }
+  public Array(Object[] elements) { this.elements = elements; }
 
   public Array concat(Array that) {
     var arr1 = elements;
@@ -36,5 +34,14 @@ public class Array {
     } catch (PrimOpError e) {
       throw new RuntimeException("Malformed Array -- got PrimOpError " + e + " in toString()");
     }
+  }
+
+  // empty array singleton
+  private static Array _empty = null;
+  public static Array empty() {
+    if (_empty == null) {
+      _empty = new Array(new Object[]{});
+    }
+    return _empty;
   }
 }

@@ -488,6 +488,17 @@ object Compiler {
         compile(locals, r)
         methodVisitor.visitLabel(end_label)
 
+      case E.Record(elems) if elems.isEmpty =>
+        // optimization: use a singleton object for empty record
+        val recordClass = classOf[runtime.Record]
+        val recordEmptyMethod = recordClass.getMethod("empty")
+        methodVisitor.visitMethodInsn(
+          Opcodes.INVOKESTATIC,
+          getAsmClassName(recordClass),
+          recordEmptyMethod.getName,
+          Type.getMethodDescriptor(recordEmptyMethod),
+          false)
+
       case E.Record(elements) =>
         // TODO this is probably better done with local variables rather than with the stack only...
         // create record object first -- so that it's going to be already in the right position in
@@ -557,6 +568,17 @@ object Compiler {
           getAsmClassName(popClass),
           lookupMethod.getName,
           Type.getMethodDescriptor(lookupMethod),
+          false)
+
+      case E.Array(elems) if elems.length == 0 =>
+        // optimization: use a singleton object for empty array
+        val arrayClass = classOf[runtime.Array]
+        val arrayEmptyMethod = arrayClass.getMethod("empty")
+        methodVisitor.visitMethodInsn(
+          Opcodes.INVOKESTATIC,
+          getAsmClassName(arrayClass),
+          arrayEmptyMethod.getName,
+          Type.getMethodDescriptor(arrayEmptyMethod),
           false)
 
       case E.Array(elems) =>

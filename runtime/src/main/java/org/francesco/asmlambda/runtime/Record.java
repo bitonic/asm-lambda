@@ -38,5 +38,13 @@ public class Record {
       throw new RuntimeException("Malformed Record -- got PrimOpError " + e + " in toString()");
     }
   }
+
+  private static Record _empty = null;
+  public static Record empty() {
+    if (_empty == null) {
+      _empty = new Record(new HashMap<>());
+    }
+    return _empty;
+  }
 }
 
