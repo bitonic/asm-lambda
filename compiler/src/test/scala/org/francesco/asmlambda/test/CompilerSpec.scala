@@ -105,8 +105,8 @@ class CompilerSpec extends FreeSpec with Matchers {
           """
       LambdaLift.`package`(pkg) shouldBe
           Package(
-            Map("main$0" -> Definition(ArraySeq.empty, ArraySeq("x"), E.Var("x"))),
-            E.Let("id", E.Def("main$0",ArraySeq(), 1), E.DynamicCall(E.Var("id"), ArraySeq(E.Prim(S.Prim.I64(42))))))
+            Map("$main$0" -> Definition(ArraySeq.empty, ArraySeq("x"), E.Var("x"))),
+            E.Let("id", E.Def("$main$0",ArraySeq(), 1), E.DynamicCall(E.Var("id"), ArraySeq(E.Prim(S.Prim.I64(42))))))
     }
 
     "def (applied)" in {
@@ -378,60 +378,56 @@ class CompilerSpec extends FreeSpec with Matchers {
 
     "array" - {
       "0" in {
-        run("[]") shouldBe Array().getValue
+        run("#[]") shouldBe Array().getValue
       }
 
       "1" in {
-        run("[1]") shouldBe Array(1).getValue
+        run("#[1]") shouldBe Array(1).getValue
       }
 
       "2" in {
-        run("[1, {foo = true}]") shouldBe Array(1, Record("foo" -> true)).getValue
+        run("#[1, {foo = true}]") shouldBe Array(1, Record("foo" -> true)).getValue
       }
 
       "lookup (both literals)" in {
-        run("[1,2,3][1]") shouldBe 2.getValue
+        run("#[1,2,3][1]") shouldBe 2.getValue
       }
 
       "lookup (index variable)" in {
-        run("let ix = 1; [1,2,3][ix]") shouldBe 2.getValue
+        run("let ix = 1; #[1,2,3][ix]") shouldBe 2.getValue
       }
 
       "lookup (array variable)" in {
-        run("let arr = [1,2,3]; arr[1]") shouldBe 2.getValue
+        run("let arr = #[1,2,3]; arr[1]") shouldBe 2.getValue
       }
 
       "lookup (both variables)" in {
-        run("let arr = [1,2,3]; let ix = 1; arr[ix]") shouldBe 2.getValue
+        run("let arr = #[1,2,3]; let ix = 1; arr[ix]") shouldBe 2.getValue
       }
 
       "length (0)" in {
-        run("length([])") shouldBe 0.getValue
+        run("length(#[])") shouldBe 0.getValue
       }
 
       "length (1)" in {
-        run("length([1])") shouldBe 1.getValue
+        run("length(#[1])") shouldBe 1.getValue
       }
     }
 
     "map" in {
       val pkg =
         """
-          // we represents nil with [], and cons with [x, xs].
-
-          def isNil(xs) = length(xs) == 0;
-          def head(xs) = xs[0];
-          def tail(xs) = xs[1];
+          def isNil(xs) = if xs then false else true;
 
           def map(f, xs) = if isNil(xs)
             then []
-            else [f(head(xs)), map(f, tail(xs))];
+            else f(car(xs)) :: map(f, cdr(xs));
 
           def square(x) = x * x;
 
-          map(square, [1, [2, [3, []]]])
+          map(square, [1, 2, 3])
         """
-      run(pkg) shouldBe Array(1, Array(4, Array(9, Array()))).getValue
+      run(pkg) shouldBe List(1, 4, 9).getValue
     }
 
     "cons" - {

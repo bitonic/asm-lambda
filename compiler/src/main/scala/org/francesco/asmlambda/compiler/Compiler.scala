@@ -233,7 +233,7 @@ object LambdaLift {
       case (defName, defn) => (defName, Name.Def(defName, ArraySeq.empty, defn.args.length))
     }: _*)
     pkg.defs.foreach { case (defName, defn) => ll.definition(defName, names0, defn) }
-    val mainExpr = ll.expr("main", names0, pkg.body)._1
+    val mainExpr = ll.expr("$main", names0, pkg.body)._1
     Package(ll.definitions.toMap, mainExpr)
   }
 }
@@ -358,8 +358,8 @@ object Compiler {
           case S.PrimOp.Mul => "mul"
           case S.PrimOp.Div => "div"
           case S.PrimOp.Eq => "eq"
-          case S.PrimOp.ArrayGet => "arrGet"
-          case S.PrimOp.ArrayLen => "arrLen"
+          case S.PrimOp.ArrayGet => "arrayGet"
+          case S.PrimOp.ArrayLen => "arrayLen"
           case S.PrimOp.ToText => "toText"
           case S.PrimOp.Less => "less"
           case S.PrimOp.LessEq => "lessEq"
@@ -705,7 +705,7 @@ object Compiler {
     compileDefinition(
       className,
       classWriter,
-      "main",
+      "$main",
       Definition(ArraySeq.empty, ArraySeq.empty, pkg.body))
 
     classWriter.toByteArray
@@ -735,7 +735,7 @@ object Compiler {
 
     // define and run
     val `class` = classLoader.defineClass(className, bytecode)
-    val main = `class`.getMethod("main")
+    val main = `class`.getMethod("$" + "main")
     new Function0[Object] { override def apply(): AnyRef = main.invoke(null) }
   }
 
