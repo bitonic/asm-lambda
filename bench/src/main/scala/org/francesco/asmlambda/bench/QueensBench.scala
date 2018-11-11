@@ -2,7 +2,7 @@ package org.francesco.asmlambda.bench
 
 import java.util.concurrent.TimeUnit
 
-import org.francesco.asmlambda.compiler.{Compiler, LambdaLift, Parser, Rename}
+import org.francesco.asmlambda.compiler.{Compiler, LambdaLift, Reader, Rename}
 import org.openjdk.jmh.annotations._
 
 object QueensBench {
@@ -77,7 +77,7 @@ object QueensBench {
           listLength(solve(10))
         """
       val pkg = LambdaLift.`package`(
-        Rename.`package`(fastparse.parse(source, Parser.`package`(_)).get.value))
+        Rename.`package`(fastparse.parse(source, Reader.`package`(_)).get.value))
       val run = Compiler.compileToFunction("org.francesco.asmlambda.bench.Queens", pkg)
       () => {
         val res = run.apply()

@@ -1,55 +1,57 @@
 package org.francesco.asmlambda.test
 
 import org.scalatest._
-
-import org.francesco.asmlambda.compiler.Value._
-import org.francesco.asmlambda.runtime.PrimOp.toText
+import org.francesco.asmlambda.runtime.{Value, WrappedValue}
+import org.francesco.asmlambda.compiler.ValueOps._
 
 class PrimOpSpec extends FreeSpec with Matchers {
   "toText" - {
+    def toText(v: WrappedValue): String = Value.toText(v.value).asInstanceOf[String]
+
     "I64" in {
-      toText(42.getValue) shouldBe "42"
+      toText(42) shouldBe "42"
     }
 
     "F64" in {
-      toText(42.0.getValue) shouldBe "42.0"
+      toText(42.0) shouldBe "42.0"
     }
 
     "Text" in {
-      toText("BEGIN \" \\ \n \t \u0000 \uDCAB \u0012 END".getValue) shouldBe
-          "\"BEGIN \" \\\\ \\n \\t \\u0000 \\uDCAB \\u0012 END\""
+      toText("BEGIN \" \\ \n \t \u0000 \uDCAB \u0012 END") shouldBe
+          "\"BEGIN \\\" \\\\ \\n \\t \\u0000 \\uDCAB \\u0012 END\""
     }
 
-    "record" - {
+    "Map" - {
       "0" in {
-        toText(Record().getValue) shouldBe "{}"
+        toText(map()) shouldBe "{}"
       }
 
       "1" in {
-        toText(Record("foo" -> true).getValue) shouldBe "{foo = true}"
+        toText(map(("foo", true))) shouldBe """{"foo" true}"""
       }
 
       "2" in {
-        toText(Record("foo" -> 42, "1" -> 3.14).getValue) shouldBe "{1 = 3.14, foo = 42}"
+        toText(map(("foo", 42), (1, 3.14))) shouldBe """{1 3.14, "foo" 42}"""
       }
 
       "nested" in {
-        toText(Record("foo" -> Array(1, Record("bar" -> 1, "baz" -> 2), 2), "blah" -> true).getValue) shouldBe
-          "{blah = true, foo = #[1, {bar = 1, baz = 2}, 2]}"
+        toText(
+          map((vec(42, false), vec(1, map(("bar", 1), ("baz", 2)), 2)), ("blah", set(nil, 56.65)))) shouldBe
+          """{[42 false] [1 {"bar" 1, "baz" 2} 2], "blah" #{56.65 nil}}"""
       }
     }
 
-    "array" - {
+    "vector" - {
       "0" in {
-        toText(Array().getValue) shouldBe "#[]"
+        toText(vec()) shouldBe "[]"
       }
 
       "1" in {
-        toText(Array(1).getValue) shouldBe "#[1]"
+        toText(vec(1)) shouldBe "[1]"
       }
 
       "2" in {
-        toText(Array(1, 2).getValue) shouldBe "#[1, 2]"
+        toText(vec(1, 2)) shouldBe "[1 2]"
       }
     }
   }

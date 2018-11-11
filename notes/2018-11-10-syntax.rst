@@ -1,0 +1,33 @@
+::
+
+  <program> ::= <form>*
+  <form>
+    ::= <fun>+                    // mutually recursive funs
+     |  <let>
+     |  <expr>
+
+  <fun> ::= (fun (<variable>*) <program>)
+  <let> ::= (let <variable> <program>)
+
+  <expr>
+    ::= <variable>
+     |  {<pair>*}                     // map
+     |  #{<expr>*}                    // set
+     |  [<expr>*]                     // vector
+     |  (\ (<variable>*) <program>)   // lambda
+     |  (<expr> <expr>*)              // application
+     |  (if <expr> <expr> <expr>?)    // if-then-else
+     |  (switch <case>* <default>?)
+     |  <prim>
+
+  <pair> ::= <expr> <expr>
+
+  <case>     ::= (<case-pat> <expr>)
+  <case-pat> ::= <long> | <symbol>
+  <default>  ::= (default <expr>)
+
+  <prim> ::= <long> | <double> | <symbol> | true | false | nil | <string>
+
+  <symbol> ::= :<variable>
+
+  <variable> ::= [a-zA-Z0-9\-_]+

@@ -3,18 +3,22 @@ package org.francesco.asmlambda.compiler
 import scala.collection.mutable.ArraySeq
 
 object Syntax {
-  sealed trait Prim
-  object Prim {
-    case class I64(v: Long) extends Prim
-    case class F64(v: Double) extends Prim
-    case class Text(v: String) extends Prim
-    case class Bool(v: Boolean) extends Prim
-    case object Nil extends Prim
+  sealed trait SwitchCase
+
+  sealed trait Scalar
+  object Scalar {
+    case class I64(v: Long) extends Scalar with SwitchCase
+    case class F64(v: Double) extends Scalar
+    case class Text(v: String) extends Scalar
+    case class Bool(v: Boolean) extends Scalar
+    case object Nil extends Scalar
+    case class Symbol(sym: String) extends Scalar with SwitchCase
   }
 
-  sealed trait PrimOp {
+  sealed trait PrimOp extends Expr {
     val arity: Int
   }
+
   object PrimOp {
     case object Add extends PrimOp {
       val arity = 2
@@ -29,7 +33,7 @@ object Syntax {
       val arity = 2
     }
     case object Eq extends PrimOp {
-      val arity = 2
+      val arity = 2 // (Any, Any) -> Bool
     }
     case object LessEq extends PrimOp {
       val arity = 2
@@ -43,66 +47,84 @@ object Syntax {
     case object GreaterEq extends PrimOp {
       val arity = 2
     }
-    case object ArrayGet extends PrimOp {
-      val arity = 2 // array, index
+    case object VectorGet extends PrimOp {
+      val arity = 2 // (Vector, I64) -> Any
     }
-    case object ArrayLen extends PrimOp {
-      val arity = 1 // array
+    case object VectorSet extends PrimOp {
+      val arity = 3 // (Vector, I64, Any) -> Unit
+    }
+    case object VectorLen extends PrimOp {
+      val arity = 1 // (Vector) -> I64
+    }
+    case object VectorSlice extends PrimOp {
+      val arity = 3 // (Vector, I64, I64) -> Vector
+    }
+    case object VectorNew extends PrimOp {
+      val arity = 2 // (I64) -> Vector
     }
     case object ToText extends PrimOp {
-      val arity = 1 // any
+      val arity = 1 // (Any) -> Text
+    }
+    case object Not extends PrimOp {
+      val arity = 1 // (Bool) -> Bool
     }
     case object Or extends PrimOp {
-      val arity = 2 // bool, bool
+      val arity = 2 // (Bool, Bool) -> Bool
     }
-    case object Car extends PrimOp {
-      val arity = 1 // cons
+    case object And extends PrimOp {
+      val arity = 2 // (Bool, Bool) -> Bool
     }
-    case object Cdr extends PrimOp {
-      val arity = 1 // cons
+    case object MapKeys extends PrimOp {
+      val arity = 1 // (Map) -> Vector
+    }
+    case object MapGet extends PrimOp {
+      val arity = 2 // (Map, I64) -> Any
+    }
+    case object MapPut extends PrimOp {
+      val arity = 3 // (Map, Any, Any) -> Any
+    }
+    case object Copy extends PrimOp {
+      val arity = 1 // (Any) -> Any
+    }
+    case object SetKeys extends PrimOp {
+      val arity = 1 // (Set) -> Vector
+    }
+    case object SetAdd extends PrimOp {
+      val arity = 1 // (Set, Any) -> Uni
     }
   }
 
   sealed trait Expr
   object Expr {
     case class Var(v: String) extends Expr
-    case class Record(fields: Map[String, Expr]) extends Expr
-    def mkRecord(fields: (String, Expr)*): Expr = Record(Map(fields: _*))
-    case class RecordLookup(rec: Expr, field: String) extends Expr
-    case class RecordUpdate(rec: Expr, field: String, body: Expr) extends Expr
-    case class Array(elements: ArraySeq[Expr]) extends Expr
-    def mkArray(els: Expr*): Expr = Array(ArraySeq(els: _*))
+
+    case class Map(fields: Predef.Map[String, Expr]) extends Expr
+    def mkMap(fields: (String, Expr)*): Expr = Map(Predef.Map(fields: _*))
+
+    case class Vector(elements: ArraySeq[Expr]) extends Expr
+    def mkVector(els: Expr*): Expr = Vector(ArraySeq(els: _*))
+
     case class Lam(args: ArraySeq[String], body: Expr) extends Expr
+
     case class App(fun: Expr, args: ArraySeq[Expr]) extends Expr
     def mkApp(fun: Expr, args: Expr*): Expr = App(fun, ArraySeq(args: _*))
-    case class Prim(prim: Syntax.Prim) extends Expr
-    case class PrimOp(pop: Syntax.PrimOp) extends Expr
-    object PrimOp {
-      val add = PrimOp(Syntax.PrimOp.Add)
-      val sub = PrimOp(Syntax.PrimOp.Sub)
-      val mul = PrimOp(Syntax.PrimOp.Mul)
-      val div = PrimOp(Syntax.PrimOp.Div)
-      val eq = PrimOp(Syntax.PrimOp.Eq)
-      val less = PrimOp(Syntax.PrimOp.Less)
-      val lessEq = PrimOp(Syntax.PrimOp.LessEq)
-      val greater = PrimOp(Syntax.PrimOp.Greater)
-      val greaterEq = PrimOp(Syntax.PrimOp.GreaterEq)
-      val arrGet = PrimOp(Syntax.PrimOp.ArrayGet)
-      val arrLen = PrimOp(Syntax.PrimOp.ArrayLen)
-      val toText = PrimOp(Syntax.PrimOp.ToText)
-      val or = PrimOp(Syntax.PrimOp.Or)
-      val car = PrimOp(Syntax.PrimOp.Car)
-      val cdr = PrimOp(Syntax.PrimOp.Cdr)
-    }
-    case class ITE(cond: Expr, left: Expr, right: Expr) extends Expr
-    case class Let(v: String, bound: Expr, body: Expr) extends Expr
-    case class Def(defName: String, bound: Definition, body: Expr) extends Expr
-    case class Cons(car: Expr, cdr: Expr) extends Expr
-    def mkList(els: Expr*): Expr = els.foldRight[Expr](Prim(Syntax.Prim.Nil)){ case (car, cdr) => Cons(car, cdr) }
+
+    case class ITE(cond: Expr, left: Expr, right: Option[Expr]) extends Expr
+
+    case class Switch(scrutined: Expr, cases: ArraySeq[(SwitchCase, Expr)], default: Option[Expr]) extends Expr
   }
 
-  case class Definition(args: ArraySeq[String], body: Expr)
+  sealed trait Form
+  object Form {
+    /** A group of (possibly) mutually recursive functions */
+    case class Defs(defs: ArraySeq[Def]) extends Form
+    case class Let(v: String, bound: Program) extends Form
+    /** A naked expression */
+    case class Expr(expr: Syntax.Expr) extends Form
+  }
 
-  case class Package(defs: Map[String, Definition], body: Expr)
+  case class Def(args: ArraySeq[Expr], body: Program)
 
+  /** if the program doesn't end with an expression Unit will be returned. */
+  case class Program(forms: ArraySeq[Form])
 }

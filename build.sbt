@@ -27,7 +27,6 @@ lazy val runtime = project in file("runtime")
 lazy val compiler = (project in file("compiler"))
     .settings(
       libraryDependencies += "org.ow2.asm" % "asm" % "7.0",
-      libraryDependencies += "com.lihaoyi" %% "fastparse" % "2.0.4",
 
       libraryDependencies += "org.scalatest" %% "scalatest" % "3.0.5" % "test",
       libraryDependencies += "org.ow2.asm" % "asm-util" % "7.0" % "test")
