@@ -36,8 +36,8 @@ class PrimOpSpec extends FreeSpec with Matchers {
 
       "nested" in {
         toText(
-          map((vec(42, false), vec(1, map(("bar", 1), ("baz", 2)), 2)), ("blah", set(nil, 56.65)))) shouldBe
-          """{[42 false] [1 {"bar" 1, "baz" 2} 2], "blah" #{56.65 nil}}"""
+          map((vec(42, false), vec(1, map(("bar", 1), ("baz", 2)), 2)), ("blah", vec(nil, 56.65)))) shouldBe
+          """{[42 false] [1 {"bar" 1, "baz" 2} 2], "blah" [() 56.65]}"""
       }
     }
 

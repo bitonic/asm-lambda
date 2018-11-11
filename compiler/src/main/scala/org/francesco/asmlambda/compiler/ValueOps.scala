@@ -19,16 +19,8 @@ object ValueOps {
     }
     new WrappedValue(map)
   }
-  implicit def setValue(v: Set[WrappedValue]): WrappedValue = {
-    val set = Value.setNew()
-    for (entry <- v) {
-      Value.setAdd(set, entry.value)
-    }
-    new WrappedValue(set)
-  }
 
   def map(els: (WrappedValue, WrappedValue)*): Map[WrappedValue, WrappedValue] = Map(els: _*)
-  def set(els: WrappedValue*): Set[WrappedValue] = Set(els: _*)
   def vec(els: WrappedValue*): Array[WrappedValue] = Array(els: _*)
 
   val nil: WrappedValue = new WrappedValue(null)

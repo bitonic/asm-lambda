@@ -2,9 +2,7 @@ package org.francesco.asmlambda.test
 
 import org.scalatest.{FreeSpec, Matchers}
 
-import scala.collection.mutable.ArraySeq
 import scala.language.implicitConversions
-import scala.collection.JavaConverters._
 import org.francesco.asmlambda.compiler._
 import org.francesco.asmlambda.runtime.Value
 
@@ -18,12 +16,11 @@ class SexpSpec extends FreeSpec with Matchers {
   val nil: Sexp = Sexp.Scalar(Syntax.Scalar.Nil)
   def sym(v: String): Sexp = Sexp.Scalar(Syntax.Scalar.Symbol(v))
 
-  def set(els: Sexp*): Sexp = Sexp.List(ListKind.Set, els.asJava)
-  def map(els: Sexp*): Sexp = Sexp.List(ListKind.Map, els.asJava)
-  def list(els: Sexp*): Sexp = Sexp.List(ListKind.Normal, els.asJava)
-  def vec(els: Sexp*): Sexp = Sexp.List(ListKind.Vector, els.asJava)
+  def map(els: Sexp*): Sexp = Sexp.Seq(SeqKind.Map, ImmArray(els: _*))
+  def list(els: Sexp*): Sexp = Sexp.Seq(SeqKind.List, ImmArray(els: _*))
+  def vec(els: Sexp*): Sexp = Sexp.Seq(SeqKind.Vector, ImmArray(els: _*))
 
-  def sexps(xs: Sexp*): ArraySeq[Sexp] = ArraySeq(xs: _*)
+  def sexps(xs: Sexp*): ImmArray[Sexp] = ImmArray(xs: _*)
 
   "i64" - {
     "normal" in {
@@ -60,25 +57,40 @@ class SexpSpec extends FreeSpec with Matchers {
       Reader("345.0 -2342.55 +2322.1 84.567") shouldBe sexps(345.0, -2342.55, 2322.1, 84.567)
     }
 
+    "scientific" in {
+      Reader("13.879e5") shouldBe sexps(13.879e5)
+    }
+
     "nothing after dot" in {
-      the [ParseError] thrownBy Reader("1.") should have message "Unexpected end of input, expected digit"
+      Reader("1.") shouldBe sexps(1.0) // not so great, consequence of using toDouble
     }
   }
 
   "var" - {
-    "+ -" - {
+    "+ -" in {
       Reader("+ +test - -abc") shouldBe sexps("+", "+test", "-", "-abc")
-      ()
     }
 
-    "simple" - {
+    "simple" in {
       Reader("abc") shouldBe sexps("abc")
-      ()
     }
 
-    "almost scalars" - {
+    "almost scalars" in {
       Reader("nill truee falsee") shouldBe sexps("nill", "truee", "falsee")
-      ()
+    }
+
+    "leading digit" in {
+      Reader("1-one") shouldBe sexps("1-one")
+    }
+
+    "with comment" in {
+      Reader("one;two") shouldBe sexps("one")
+    }
+
+    // I think it makes more sense this way -- having the symbol to follow the variable with no whitespace seems counter
+    // intuitive
+    "trailing symbol" in {
+      Reader("one:two") shouldBe sexps("one:two")
     }
   }
 
@@ -87,13 +99,13 @@ class SexpSpec extends FreeSpec with Matchers {
   }
 
   "nil" in {
-    Reader("nil") shouldBe sexps(nil)
+    Reader("()") shouldBe sexps(list())
   }
 
   "lists" in {
-    Reader("(a [b c] d {e #{f (g)}}) (simpler-list) ()") shouldBe
+    Reader("(a [b c] d {e [f (g)]}) (simpler-list) ()") shouldBe
       sexps(
-        list("a", vec("b", "c"), "d", map("e", set("f", list("g")))),
+        list("a", vec("b", "c"), "d", map("e", vec("f", list("g")))),
         list("simpler-list"),
         list())
   }
@@ -110,7 +122,7 @@ class SexpSpec extends FreeSpec with Matchers {
     }
 
     "only colon" in {
-      the [ParseError] thrownBy Reader(":") should have message "Unexpected end of input, expected initial identifier character"
+      the [ReaderError] thrownBy Reader(":") should have message "Unexpected end of input, expected initial identifier character"
     }
   }
 

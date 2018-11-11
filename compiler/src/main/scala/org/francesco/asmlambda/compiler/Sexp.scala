@@ -1,28 +1,22 @@
 package org.francesco.asmlambda.compiler
 
-import java.util.ArrayList
-
 import scala.annotation.{switch, tailrec}
-import scala.collection.JavaConverters._
-import scala.collection.mutable
 
 import Syntax._
+import org.francesco.asmlambda.compiler.{ImmArray => IA}
 
-sealed trait ListKind {
+sealed trait SeqKind {
   val name: String
 }
-object ListKind {
-  case object Normal extends ListKind {
+object SeqKind {
+  case object List extends SeqKind {
     val name: String = "list"
   }
-  case object Vector extends ListKind {
+  case object Vector extends SeqKind {
     val name: String = "vector"
   }
-  case object Map extends ListKind {
+  case object Map extends SeqKind {
     val name: String = "map"
-  }
-  case object Set extends ListKind {
-    val name: String = "set"
   }
 }
 
@@ -31,16 +25,45 @@ sealed trait Atom extends Sexp
 object Sexp {
   case class Var(v: String) extends Atom
   case class Scalar(v: Syntax.Scalar) extends Atom
-  case class List(kind: ListKind, els: java.util.List[Sexp]) extends Sexp
+  case class Seq(kind: SeqKind, els: ImmArray[Sexp]) extends Sexp
+
+  private def unapplyKindIA(kind: SeqKind, sexp: Sexp): Option[ImmArray[Sexp]] = sexp match {
+    case Seq(`kind`, els) => Some(els)
+    case _ => None
+  }
+
+  private def unapplyKindSeq(kind: SeqKind, sexp: Sexp): Option[scala.collection.Seq[Sexp]] =
+    unapplyKindIA(kind, sexp).map(_.toSeq)
+
+  object List {
+    def unapply(sexp: Sexp): Option[ImmArray[Sexp]] = unapplyKindIA(SeqKind.List, sexp)
+  }
+  object ListSeq {
+    def unapplySeq(sexp: Sexp): Option[scala.collection.Seq[Sexp]] = unapplyKindSeq(SeqKind.List, sexp)
+  }
+
+  object Vector {
+    def unapply(sexp: Sexp): Option[ImmArray[Sexp]] = unapplyKindIA(SeqKind.Vector, sexp)
+  }
+  object VectorSeq {
+    def unapplySeq(sexp: Sexp): Option[scala.collection.Seq[Sexp]] = unapplyKindSeq(SeqKind.Vector, sexp)
+  }
+
+  object Map {
+    def unapply(sexp: Sexp): Option[ImmArray[Sexp]] = unapplyKindIA(SeqKind.Map, sexp)
+  }
+  object MapSeq {
+    def unapplySeq(sexp: Sexp): Option[scala.collection.Seq[Sexp]] = unapplyKindSeq(SeqKind.Map, sexp)
+  }
 }
 
-case class ParseError(cursor: Int, topLevel: ArrayList[Sexp], context: List[(ListKind, ArrayList[Sexp])], msg: String)
+case class ReaderError(cursor: Int, topLevel: ImmArray[Sexp], context: List[(SeqKind, ImmArray[Sexp])], msg: String)
     extends Throwable(msg)
 
 final private class Reader(input: String) {
   private var cursor: Int = 0
-  private val topLevel: ArrayList[Sexp] = new ArrayList[Sexp]()
-  private var context: List[(ListKind, ArrayList[Sexp])] = List()
+  private val topLevel: IA.Builder[Sexp] = IA.newBuilder
+  private var context: List[(SeqKind, IA.Builder[Sexp])] = List()
 
   @tailrec
   def eatWhitespace(): Unit = {
@@ -68,7 +91,8 @@ final private class Reader(input: String) {
     }
   }
 
-  def fail(s: String) = throw ParseError(cursor, topLevel, context, s)
+  def fail(s: String) =
+    throw ReaderError(cursor, topLevel.result(), context.map{ case (lk, sexps) => (lk, sexps.result()) }, s)
 
   def assertNoEnd(what: String): Unit = {
     if (cursor >= input.length) {
@@ -123,32 +147,31 @@ final private class Reader(input: String) {
     }
   }
 
-  def close(acceptedKinds: Array[ListKind]): Unit = {
-    val acceptedStr = acceptedKinds.map(_.name).mkString(" or ")
+  def close(acceptedKind: SeqKind): Unit = {
     context match {
       case Nil =>
-        fail(s"Got closing character for $acceptedStr at the top level")
+        fail(s"Got closing character for ${acceptedKind.name} at the top level")
       case (kind, els) :: rest =>
-        if (acceptedKinds.contains(kind)) {
+        if (kind == acceptedKind) {
           context = rest
-          push(Sexp.List(kind, els))
+          push(Sexp.Seq(kind, els.result()))
         } else {
-          fail(s"Got closing character for $acceptedStr, but I am in a ${kind.name}")
+          fail(s"Got closing character for ${acceptedKind.name}, but I am in a ${kind.name}")
         }
     }
   }
 
-  def enter(kind: ListKind): Unit = {
+  def enter(kind: SeqKind): Unit = {
     val oldContext = context
-    context = (kind, new ArrayList[Sexp]()) :: oldContext
+    context = (kind, IA.newBuilder[Sexp]) :: oldContext
   }
 
   def push(sexp: Sexp): Unit = context match {
     case Nil =>
-      topLevel.add(sexp)
+      topLevel += sexp
       ()
     case (_, els) :: _ =>
-      els.add(sexp)
+      els += sexp
       ()
   }
 
@@ -246,10 +269,66 @@ final private class Reader(input: String) {
 
   def identifierCheckScalar(): Atom = {
     identifier() match {
-      case "nil" => Sexp.Scalar(Scalar.Nil)
       case "true" => Sexp.Scalar(Scalar.Bool(true))
       case "false" => Sexp.Scalar(Scalar.Bool(false))
       case s => Sexp.Var(s)
+    }
+  }
+
+  val atomCategories: Set[Byte] = Set(
+    Character.UPPERCASE_LETTER,
+    Character.LOWERCASE_LETTER,
+    Character.TITLECASE_LETTER,
+    Character.MODIFIER_LETTER,
+    Character.OTHER_LETTER,
+
+    Character.NON_SPACING_MARK,
+
+    Character.DECIMAL_DIGIT_NUMBER,
+    Character.LETTER_NUMBER,
+    Character.OTHER_NUMBER,
+
+    Character.CONNECTOR_PUNCTUATION,
+    Character.DASH_PUNCTUATION,
+    Character.OTHER_PUNCTUATION,
+
+    Character.MATH_SYMBOL,
+    Character.CURRENCY_SYMBOL,
+    Character.MODIFIER_LETTER,
+    Character.OTHER_SYMBOL,
+  )
+  def atom(): Atom = {
+    val stringBuilder = new StringBuilder()
+
+    @tailrec
+    def loop(): Unit = {
+      if (cursor < input.length) {
+        val codePoint = input.codePointAt(cursor)
+        val category = Character.getType(codePoint)
+        if (!(codePoint == ',' || codePoint == ';') && atomCategories.contains(category.toByte)) {
+          stringBuilder ++= Character.toChars(codePoint)
+          cursor += Character.charCount(codePoint)
+          loop()
+        }
+      }
+    }
+    loop()
+
+    val s = stringBuilder.mkString
+    s match {
+      case "true" => Sexp.Scalar(Scalar.Bool(true))
+      case "false" => Sexp.Scalar(Scalar.Bool(false))
+      case _ =>
+        try {
+          Sexp.Scalar(Scalar.I64(s.toLong))
+        } catch {
+          case _: NumberFormatException =>
+            try {
+              Sexp.Scalar(Scalar.F64(s.toDouble))
+            } catch {
+              case _: NumberFormatException => Sexp.Var(s)
+            }
+        }
     }
   }
 
@@ -261,20 +340,17 @@ final private class Reader(input: String) {
       cursor += 1
       (ch: @switch) match {
         case '(' =>
-          enter(ListKind.Normal)
+          enter(SeqKind.List)
         case ')' =>
-          close(Array(ListKind.Normal))
+          close(SeqKind.List)
         case '[' =>
-          enter(ListKind.Vector)
+          enter(SeqKind.Vector)
         case ']' =>
-          close(Array(ListKind.Vector))
+          close(SeqKind.Vector)
         case '{' =>
-          enter(ListKind.Map)
+          enter(SeqKind.Map)
         case '}' =>
-          close(Array(ListKind.Map, ListKind.Set))
-        case '#' =>
-          expect('{')
-          enter(ListKind.Set)
+          close(SeqKind.Map)
         case '"' =>
           cursor -= 1
           push(Sexp.Scalar(Scalar.Text(string())))
@@ -284,27 +360,8 @@ final private class Reader(input: String) {
         case ';' =>
           eatUntilNewline()
         case _ =>
-          if (isDigit(ch)) {
-            cursor -= 1
-            push(Sexp.Scalar(number()))
-          } else if (ch == '+' || ch == '-') {
-            // if there is a digit next it's a number, otherwise it's an identifier
-            if (cursor < input.length) {
-              val nextCh = input.charAt(cursor)
-              if (isDigit(nextCh)) {
-                cursor -= 1
-                push(Sexp.Scalar(number()))
-              } else {
-                cursor -= 1
-                push(identifierCheckScalar())
-              }
-            } else {
-              push(Sexp.Var(ch + ""))
-            }
-          } else {
-            cursor -= 1
-            push(identifierCheckScalar())
-          }
+          cursor -= 1
+          push(atom())
       }
       loop()
     } else {
@@ -313,10 +370,9 @@ final private class Reader(input: String) {
       } else {
         val toClose = context.map {
           case (kind, _) => kind match {
-            case ListKind.Normal => ')'
-            case ListKind.Vector => ']'
-            case ListKind.Map => '}'
-            case ListKind.Set => '}'
+            case SeqKind.List => ')'
+            case SeqKind.Vector => ']'
+            case SeqKind.Map => '}'
           }}.mkString
         fail(s"Unexpected end of input, still need to close $toClose")
       }
@@ -325,9 +381,9 @@ final private class Reader(input: String) {
 }
 
 object Reader {
-  def apply(input: String): mutable.ArraySeq[Sexp] = {
+  def apply(input: String): ImmArray[Sexp] = {
     val parser = new Reader(input)
     parser.loop()
-    mutable.ArraySeq(parser.topLevel.asScala: _*)
+    parser.topLevel.result()
   }
 }

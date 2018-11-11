@@ -1,7 +1,5 @@
 package org.francesco.asmlambda.compiler
 
-import scala.collection.mutable.ArraySeq
-
 object Syntax {
   sealed trait SwitchCase
 
@@ -86,45 +84,45 @@ object Syntax {
     case object Copy extends PrimOp {
       val arity = 1 // (Any) -> Any
     }
-    case object SetKeys extends PrimOp {
-      val arity = 1 // (Set) -> Vector
-    }
-    case object SetAdd extends PrimOp {
-      val arity = 1 // (Set, Any) -> Uni
-    }
   }
 
   sealed trait Expr
   object Expr {
-    case class Var(v: String) extends Expr
+    case class Var(v: String) extends Expr with SwitchCase
 
-    case class Map(fields: Predef.Map[String, Expr]) extends Expr
-    def mkMap(fields: (String, Expr)*): Expr = Map(Predef.Map(fields: _*))
+    case class Set(v: String, e: Expr) extends Expr
 
-    case class Vector(elements: ArraySeq[Expr]) extends Expr
-    def mkVector(els: Expr*): Expr = Vector(ArraySeq(els: _*))
+    case class Scalar(s: Syntax.Scalar) extends Expr
 
-    case class Lam(args: ArraySeq[String], body: Expr) extends Expr
+    case class Map(fields: ImmArray[(Expr, Expr)]) extends Expr
+    def mkMap(fields: (Expr, Expr)*): Expr = Map(ImmArray(fields: _*))
 
-    case class App(fun: Expr, args: ArraySeq[Expr]) extends Expr
-    def mkApp(fun: Expr, args: Expr*): Expr = App(fun, ArraySeq(args: _*))
+    case class Vector(elements: ImmArray[Expr]) extends Expr
+    def mkVector(els: Expr*): Expr = Vector(ImmArray(els: _*))
+
+    case class Lam(args: ImmArray[String], body: Program) extends Expr
+
+    case class App(fun: Expr, args: ImmArray[Expr]) extends Expr
+    def mkApp(fun: Expr, args: Expr*): Expr = App(fun, ImmArray(args: _*))
 
     case class ITE(cond: Expr, left: Expr, right: Option[Expr]) extends Expr
 
-    case class Switch(scrutined: Expr, cases: ArraySeq[(SwitchCase, Expr)], default: Option[Expr]) extends Expr
+    case class Switch(scrutined: Expr, cases: ImmArray[(SwitchCase, Program)]) extends Expr
+
+    case class Do(body: Program) extends Expr
   }
 
   sealed trait Form
   object Form {
     /** A group of (possibly) mutually recursive functions */
-    case class Defs(defs: ArraySeq[Def]) extends Form
+    case class Defs(defs: ImmArray[Def]) extends Form
     case class Let(v: String, bound: Program) extends Form
     /** A naked expression */
     case class Expr(expr: Syntax.Expr) extends Form
   }
 
-  case class Def(args: ArraySeq[Expr], body: Program)
+  case class Def(v: String, args: ImmArray[String], body: Program)
 
   /** if the program doesn't end with an expression Unit will be returned. */
-  case class Program(forms: ArraySeq[Form])
+  case class Program(forms: ImmArray[Form])
 }

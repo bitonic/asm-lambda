@@ -13,7 +13,6 @@ import java.util.*;
  * * Symbol => {@link Symbol}
  * * Vector => {@link Object[]}
  * * Map => {@link HashMap}
- * * Set => {@link HashSet}
  * * functions => {@link Functions.Function}
  *
  * Generally speaking we _do not_ define our own classes for values, as you can see above. {@link Symbol} and
@@ -55,7 +54,7 @@ public final class Value {
           var value = values.pop();
 
           if (value == null) {
-            stringBuilder.append("nil");
+            stringBuilder.append("()");
           } else if (value instanceof Long) {
             stringBuilder.append(value);
           } else if (value instanceof Double) {
@@ -101,24 +100,10 @@ public final class Value {
               instructions.push(ToTextInstruction.VALUE);
               values.push(k);
             }
-          } else if (value instanceof HashSet) {
-            HashSet set = (HashSet) value;
-            stringBuilder.append("#{");
-            instructions.push(ToTextInstruction.CLOSE_BRACE);
-            boolean first = true;
-            for (Object v : set) {
-              if (first) {
-                first = false;
-              } else {
-                instructions.push(ToTextInstruction.SPACE);
-              }
-              instructions.push(ToTextInstruction.VALUE);
-              values.push(v);
-            }
           } else if (value instanceof Functions.Function) {
             stringBuilder.append("<function>");
           } else if (value instanceof WrappedValue) {
-            // optimization so that we can use the HashMap / HashSet method directly rather than mapGet / mapKeys /
+            // optimization so that we can use the HashMap method directly rather than mapGet / mapKeys /
             // setContains / setKeys
             instructions.push(ToTextInstruction.VALUE);
             values.push(((WrappedValue) value).value);
@@ -229,21 +214,10 @@ public final class Value {
           right.push(arr2[i]);
         }
       } else if (l instanceof WrappedValue && r instanceof WrappedValue) {
-        // optimization so that we can use the HashMap / HashSet method directly rather than mapGet / mapKeys /
+        // optimization so that we can use the HashMap method directly rather than mapGet / mapKeys /
         // setContains / setKeys
-        left.push((WrappedValue) l);
-        right.push((WrappedValue) r);
-      } else if (l instanceof HashSet && r instanceof HashSet) {
-        var set1 = (HashSet) l;
-        var set2 = (HashSet) r;
-        if (set1.size() != set2.size()) {
-          return false;
-        }
-        for (Object el : set1) {
-          if (!set2.contains(set1)) {
-            return false;
-          }
-        }
+        left.push(((WrappedValue) l).value);
+        right.push(((WrappedValue) r).value);
       } else if (l instanceof HashMap && r instanceof HashMap) {
         var rec1 = (HashMap) l;
         var rec2 = (HashMap) r;
@@ -302,13 +276,8 @@ public final class Value {
           toHash.push(entry.getValue());
           toHash.push(entry.getKey());
         }
-      } else if (v instanceof HashSet) {
-        HashSet set = (HashSet) v;
-        for (Object el : set) {
-          toHash.push(el);
-        }
       } else if (v instanceof WrappedValue) {
-        // optimization so that we can use the HashMap / HashSet method directly rather than mapGet / mapKeys /
+        // optimization so that we can use the HashMap method directly rather than mapGet / mapKeys /
         // setContains / setKeys
         toHash.push(((WrappedValue) v).value);
       } else {
@@ -324,7 +293,7 @@ public final class Value {
    * {@link Object#equals(Object)}. The primitive operations defined here do the wrapping and unwrapping as appropriate.
    */
   private static Object wrapNonScalars(Object value) {
-    if (value instanceof Object[] || value instanceof HashMap || value instanceof HashSet) {
+    if (value instanceof Object[] || value instanceof HashMap) {
       return new WrappedValue(value);
     }
     return value;
@@ -391,46 +360,6 @@ public final class Value {
     }
 
     return map.get(wrappedKey);
-  }
-
-  public static Object setNew() {
-    return new HashSet();
-  }
-
-  public static Object setKeys(Object set0) {
-    if (!(set0 instanceof HashSet)) {
-      throw new RuntimeException("Can't call setKeys on value of type " + set0.getClass());
-    }
-    HashSet set = (HashSet) set0;
-
-    Object[] keys = new Object[set.size()];
-    int ix = 0;
-    for (Object k : set) {
-      keys[ix] = unwrap(k);
-      ix++;
-    }
-
-    return keys;
-  }
-
-  public static Object setAdd(Object set0, Object k) {
-    if (!(set0 instanceof HashSet)) {
-      throw new RuntimeException("Can't call setAdd on value of type " + set0.getClass());
-    }
-    HashSet set = (HashSet) set0;
-
-    set.add(wrapNonScalars(k));
-
-    return null;
-  }
-
-  public static Object setContains(Object set0, Object k) {
-    if (!(set0 instanceof HashSet)) {
-      throw new RuntimeException("Can't call setAdd on value of type " + set0.getClass());
-    }
-    HashSet set = (HashSet) set0;
-
-    return set.contains(wrapNonScalars(k));
   }
 
   public static Object add(Object e1, Object e2) {
