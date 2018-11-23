@@ -81,8 +81,8 @@ object NoShadowing {
           newProgram = Form.Let(newV, newBound) :: newProgram
           counters = newCounters
         case Form.Defs(defs0) =>
-          // TODO note that this means that if these defs shadow each other you just get the latest in _all_ of them.
-          //   not very nice.
+          // Note that we _know_ that the names in `defs0` do not shadow each other, but they
+          // might shadow previous names.
           var newCounters1 = counters
           val defs1 = defs0.map{
             case Def(v, args, program) =>

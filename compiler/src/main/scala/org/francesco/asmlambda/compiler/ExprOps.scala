@@ -24,6 +24,7 @@ object ExprOps {
   def caseSym(v: String, body: Option[Expr] = None): (SwitchCase, Option[Expr]) = (Scalar.Symbol(v), body)
   def caseI64(i: Long, body: Option[Expr] = None): (SwitchCase, Option[Expr]) = (Scalar.I64(i), body)
   def `do`(body: Form*): Expr = Expr.Do(Program(ImmArray(body: _*)))
+  def app(fun: Expr, args: Expr*): Expr = Expr.App(fun, ImmArray(args: _*))
 
   def expr(e: Expr): Form = Form.Expr(e)
 }

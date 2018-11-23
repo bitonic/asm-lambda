@@ -136,4 +136,12 @@ class ParserSpec extends FreeSpec with Matchers {
           caseI64(123),
           caseVar("v", Some(`do`(expr("da"), expr("da"), expr("da")))))
   }
+
+  "mutual" in {
+    "(mutual (def foo [] (bar)) (def bar [] (foo)))" shouldBeProgram
+      mkProgram(Form.mkDefs(
+        Def("foo", ImmArray.empty, mkProgram(Form.Expr(app("bar")))),
+        Def("bar", ImmArray.empty, mkProgram(Form.Expr(app("foo")))),
+      ))
+  }
 }

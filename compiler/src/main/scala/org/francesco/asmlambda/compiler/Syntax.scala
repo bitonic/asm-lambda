@@ -116,6 +116,7 @@ object Syntax {
   object Form {
     /** A group of (possibly) mutually recursive functions. All names _must_ be distinct. */
     case class Defs(defs: ImmArray[Def]) extends Form
+    def mkDefs(defs: Def*): Defs = Defs(ImmArray(defs: _*))
     case class Let(v: String, bound: Syntax.Expr) extends Form
     /** A naked expression */
     case class Expr(expr: Syntax.Expr) extends Form
@@ -125,4 +126,5 @@ object Syntax {
 
   /** if the program doesn't end with an expression Unit will be returned. */
   case class Program(forms: ImmArray[Form])
+  def mkProgram(forms: Form*): Program = Program(ImmArray(forms: _*))
 }

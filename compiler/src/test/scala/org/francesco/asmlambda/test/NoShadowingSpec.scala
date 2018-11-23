@@ -42,6 +42,20 @@ class NoShadowingSpec extends FreeSpec with Matchers {
   }
 
   "lets" in {
-    NoShadowing("""(let x "blah") (let x 42) x""") shouldBeProgram """(let x "blah") (let x$1 42) x$1"""
+    NoShadowing("""(let x "blah") x (let x 42) x""") shouldBeProgram """(let x "blah") x (let x$1 42) x$1"""
+  }
+
+  "defs" in {
+    NoShadowing("""
+      (def foo [] 42)
+      (mutual
+        (def bar [] (foo))
+        (def foo [] (bar)))
+    """) shouldBeProgram """
+      (def foo [] 42)
+      (mutual
+        (def bar [] (foo$1))
+        (def foo$1 [] (bar)))
+    """
   }
 }
