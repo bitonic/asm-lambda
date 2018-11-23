@@ -6,6 +6,31 @@ import Syntax._
 case class ParseError(msg: String) extends Throwable(msg)
 
 object Parser {
+  val primOps: Map[String, PrimOp] = Map(
+    "+" -> PrimOp.Add,
+    "*" -> PrimOp.Mul,
+    "-" -> PrimOp.Sub,
+    "/" -> PrimOp.Div,
+    "=" -> PrimOp.Eq,
+    "<=" -> PrimOp.LessEq,
+    "<" -> PrimOp.Less,
+    ">" -> PrimOp.Greater,
+    ">=" -> PrimOp.GreaterEq,
+    "vector-get" -> PrimOp.VectorGet,
+    "vector-set!" -> PrimOp.VectorSet,
+    "vector-len" -> PrimOp.VectorLen,
+    "vector-slice" -> PrimOp.VectorSlice,
+    "vector-new" -> PrimOp.VectorNew,
+    "to-text" -> PrimOp.ToText,
+    "not" -> PrimOp.Not,
+    "or" -> PrimOp.Or,
+    "and" -> PrimOp.And,
+    "map-keys" -> PrimOp.MapKeys,
+    "map-get" -> PrimOp.MapGet,
+    "map-put!" -> PrimOp.MapPut,
+    "copy" -> PrimOp.Copy,
+  )
+
   val reserved: Set[String] = Set("def", "let", "if", "fn", "do", "switch", "set!")
 
   private def checkArgsList(args: ImmArray[Sexp]): ImmArray[String] = {
@@ -26,7 +51,10 @@ object Parser {
   }
 
   def expr(sexp: Sexp): Expr = sexp match {
-    case ValidVar(v) => Expr.Var(v)
+    case ValidVar(v) => primOps.get(v) match{
+      case None => Expr.Var(v)
+      case Some(pop) => pop
+    }
 
     case Sexp.Scalar(scalar) => Expr.Scalar(scalar)
 
@@ -52,10 +80,13 @@ object Parser {
       Expr.ITE(expr(cond), expr(l), None)
 
     case Sexp.ListSeq(Sexp.Var("switch"), e, scases @ _*) =>
-      val cases: ImmArray[(SwitchCase, Program)] = ImmArray(scases: _*).map {
-        case Sexp.VectorSeq(ValidVar(v), body @ _*) => (Expr.Var(v), program(body.iterator))
-        case Sexp.VectorSeq(Sexp.Scalar(sym: Scalar.Symbol), body @ _*) => (sym, program(body.iterator))
-        case Sexp.VectorSeq(Sexp.Scalar(i: Scalar.I64), body @ _*) => (i, program(body.iterator))
+      val cases: ImmArray[(SwitchCase, Option[Expr])] = ImmArray(scases: _*).map {
+        case Sexp.VectorSeq(ValidVar(v)) => (Expr.Var(v), None)
+        case Sexp.VectorSeq(ValidVar(v), body) => (Expr.Var(v), Some(expr(body)))
+        case Sexp.VectorSeq(Sexp.Scalar(sym: Scalar.Symbol)) => (sym, None)
+        case Sexp.VectorSeq(Sexp.Scalar(sym: Scalar.Symbol), body) => (sym, Some(expr(body)))
+        case Sexp.VectorSeq(Sexp.Scalar(i: Scalar.I64)) => (i, None)
+        case Sexp.VectorSeq(Sexp.Scalar(i: Scalar.I64), body) => (i, Some(expr(body)))
         case scase => throw ParseError(s"Bad switch case: $scase")
       }
       Expr.Switch(expr(e), cases)
@@ -90,9 +121,9 @@ object Parser {
 
     for (sexp <- sexps) {
       sexp match {
-        case Sexp.ListSeq(Sexp.Var("let"), Sexp.Var(v), body @ _*) =>
+        case Sexp.ListSeq(Sexp.Var("let"), Sexp.Var(v), body) =>
           clearDefs()
-          builder += Form.Let(v, program(body.iterator))
+          builder += Form.Let(v, expr(body))
         case Sexp.ListSeq(Sexp.Var("def"), Sexp.Var(v), Sexp.Vector(args), body @ _*) =>
           pushDef(Def(v, checkArgsList(args), program(body.iterator)))
         case _ =>

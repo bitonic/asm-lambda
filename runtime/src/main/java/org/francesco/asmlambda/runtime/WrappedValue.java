@@ -24,7 +24,7 @@ public final class WrappedValue {
 
   @Override
   public int hashCode() {
-    return (Integer) Value.hashCode(this);
+    return Value.hashCodeInt(this);
   }
 
   @Override

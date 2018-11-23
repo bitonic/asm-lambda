@@ -26,6 +26,23 @@ class ImmArray[+A] private (array: mutable.ArraySeq[A]) {
 
   def apply(ix: Int): A = array(ix)
 
+  def foldLeft[B](z0: B)(op: (B, A) => B): B = {
+    var z = z0
+    for (i <- 0 until length) {
+      val thisZ = z
+      z = op(thisZ, array(i))
+    }
+    z
+  }
+
+  def foreach(f: A => Unit): Unit = {
+    for (i <- 0 until length) {
+      f(array(i))
+    }
+  }
+
+  // overrides
+
   override def equals(obj: Any): Boolean = obj match {
     case arr: ImmArray[A] => iterator sameElements arr.iterator
     case _ => false

@@ -2,7 +2,7 @@ package org.francesco.asmlambda.bench
 
 import java.util.concurrent.TimeUnit
 
-import org.francesco.asmlambda.compiler.{Compiler, LambdaLift, Reader, Rename}
+import org.francesco.asmlambda.compiler.{Compiler, LambdaLift, Reader, NoShadowing}
 import org.openjdk.jmh.annotations._
 
 object QueensBench {

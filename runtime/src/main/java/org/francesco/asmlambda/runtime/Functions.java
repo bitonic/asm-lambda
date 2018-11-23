@@ -42,22 +42,22 @@ public final class Functions {
   }
 
   @FunctionalInterface
-  public interface Function7<A, B, C, D, E, F, G, H> extends Function {
-    H apply(A a, B b, C c, D d, E e, F f, G g);
+  public interface Function7 extends Function {
+    Object apply(Object a, Object b, Object c, Object d, Object e, Object f, Object g);
   }
 
   @FunctionalInterface
-  public interface Function8<A, B, C, D, E, F, G, H, J> extends Function {
-    J apply(A a, B b, C c, D d, E e, F f, G g, H h);
+  public interface Function8 extends Function {
+    Object apply(Object a, Object b, Object c, Object d, Object e, Object f, Object g, Object h);
   }
 
   @FunctionalInterface
-  public interface Function9<A, B, C, D, E, F, G, H, J, K> extends Function {
-    K apply(A a, B b, C c, D d, E e, F f, G g, H h, J j);
+  public interface Function9 extends Function {
+    Object apply(Object a, Object b, Object c, Object d, Object e, Object f, Object g, Object h, Object j);
   }
 
   @FunctionalInterface
-  public interface Function10<A, B, C, D, E, F, G, H, J, K, I> extends Function {
-    I apply(A a, B b, C c, D d, E e, F f, G g, H h, J j, K k);
+  public interface Function10 extends Function {
+    Object apply(Object a, Object b, Object c, Object d, Object e, Object f, Object g, Object h, Object j, Object k);
   }
 }

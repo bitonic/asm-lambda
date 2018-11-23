@@ -60,7 +60,7 @@ object Sexp {
 case class ReaderError(cursor: Int, topLevel: ImmArray[Sexp], context: List[(SeqKind, ImmArray[Sexp])], msg: String)
     extends Throwable(msg)
 
-final private class Reader(input: String) {
+final private class Reader(input: String, allowDollarInIdentifier: Boolean = false) {
   private var cursor: Int = 0
   private val topLevel: IA.Builder[Sexp] = IA.newBuilder
   private var context: List[(SeqKind, IA.Builder[Sexp])] = List()
@@ -248,7 +248,8 @@ final private class Reader(input: String) {
   val identifierInitial: Set[Char] =
     Set('a' to 'z': _*) ++
         Set('A' to 'Z': _*) ++
-        Set('!', '$', '%', '&', '*', '/', '<', '=', '>', '?', '~', '_', '^', '+', '-')
+        Set('!', '%', '&', '*', '/', '<', '=', '>', '?', '~', '_', '^', '+', '-') ++
+        (if (allowDollarInIdentifier) { Set('$') } else { Set.empty })
   def identifier(): String = {
     val stringBuilder = new StringBuilder()
     stringBuilder += satisfy("initial identifier character", identifierInitial.contains)
@@ -381,8 +382,8 @@ final private class Reader(input: String) {
 }
 
 object Reader {
-  def apply(input: String): ImmArray[Sexp] = {
-    val parser = new Reader(input)
+  def apply(input: String, allowDollarInIdentifier: Boolean = false): ImmArray[Sexp] = {
+    val parser = new Reader(input, allowDollarInIdentifier)
     parser.loop()
     parser.topLevel.result()
   }

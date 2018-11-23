@@ -4,7 +4,7 @@ import org.scalatest._
 import org.francesco.asmlambda.runtime.{Value, WrappedValue}
 import org.francesco.asmlambda.compiler.ValueOps._
 
-class PrimOpSpec extends FreeSpec with Matchers {
+class ValueSpec extends FreeSpec with Matchers {
   "toText" - {
     def toText(v: WrappedValue): String = Value.toText(v.value).asInstanceOf[String]
 

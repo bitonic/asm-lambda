@@ -247,7 +247,7 @@ public final class Value {
       return eqBool(e1, e2);
   }
 
-  public static Object hashCode(Object e0) {
+  public static int hashCodeInt(Object e0) {
     var toHash = new Stack<>();
     toHash.push(e0);
 
@@ -286,6 +286,10 @@ public final class Value {
     }
 
     return hash;
+  }
+
+  public static Object hashCode(Object e) {
+    return Long.valueOf(hashCodeInt(e));
   }
 
   /**

@@ -107,16 +107,16 @@ object Syntax {
 
     case class ITE(cond: Expr, left: Expr, right: Option[Expr]) extends Expr
 
-    case class Switch(scrutined: Expr, cases: ImmArray[(SwitchCase, Program)]) extends Expr
+    case class Switch(scrutined: Expr, cases: ImmArray[(SwitchCase, Option[Expr])]) extends Expr
 
     case class Do(body: Program) extends Expr
   }
 
   sealed trait Form
   object Form {
-    /** A group of (possibly) mutually recursive functions */
+    /** A group of (possibly) mutually recursive functions. All names _must_ be distinct. */
     case class Defs(defs: ImmArray[Def]) extends Form
-    case class Let(v: String, bound: Program) extends Form
+    case class Let(v: String, bound: Syntax.Expr) extends Form
     /** A naked expression */
     case class Expr(expr: Syntax.Expr) extends Form
   }

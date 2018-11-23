@@ -8,18 +8,22 @@ import scala.language.implicitConversions
 import org.scalatest.{FreeSpec, Matchers, Assertion}
 
 class ParserSpec extends FreeSpec with Matchers {
-  implicit def stringSexp(s: String): Sexp = {
-    val res = Reader(s)
-    assert(res.length == 1)
-    res(0)
-  }
-
   implicit def stringSexps(s: String): ImmArray[Sexp] = Reader(s)
+  implicit def stringSexp(s: String): Sexp = {
+    val sexps = Reader(s)
+    if (sexps.length == 1) {
+      sexps(0)
+    } else {
+      throw new RuntimeException(s"Expected 1 sexps, but got ${sexps.length}")
+    }
+  }
 
   case class ShouldBeExpr(sexp: Sexp) {
     def shouldBeExpr(e: Expr): Assertion = Parser.expr(sexp) shouldBe e
   }
-  implicit def stringShouldBeExpr(s: String): ShouldBeExpr = ShouldBeExpr(s)
+  implicit def stringShouldBeExpr(s: String): ShouldBeExpr = {
+    ShouldBeExpr(s)
+  }
 
   case class ShouldBeProgram(sexps: ImmArray[Sexp]) {
     def shouldBeProgram(p: Program): Assertion = Parser.program(sexps.iterator) shouldBe p
@@ -47,6 +51,12 @@ class ParserSpec extends FreeSpec with Matchers {
 
     "string" in {
       """ "test" """ shouldBeExpr str("test")
+    }
+  }
+
+  "primop" - {
+    "plus" in {
+      "+" shouldBeExpr PrimOp.Add
     }
   }
 
@@ -115,15 +125,15 @@ class ParserSpec extends FreeSpec with Matchers {
     val e =
       """
         (switch some-expr
-          [:symbol 1-one 2-two]
+          [:symbol 1-one]
           [123] ; nothing
           [v (do da da da)])
       """
     e shouldBeExpr
         switch(
           "some-expr",
-          caseSym("symbol", expr("1-one"), expr("2-two")),
+          caseSym("symbol", Some("1-one")),
           caseI64(123),
-          caseVar("v", expr(`do`(expr("da"), expr("da"), expr("da")))))
+          caseVar("v", Some(`do`(expr("da"), expr("da"), expr("da")))))
   }
 }
