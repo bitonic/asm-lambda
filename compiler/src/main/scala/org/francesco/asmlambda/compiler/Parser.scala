@@ -59,7 +59,7 @@ object Parser {
         case Some(pop) => pop
       }
 
-    case Sexp.Scalar(scalar) => Expr.Scalar(scalar)
+    case Sexp.Scalar(scalar) => scalar
 
     case Sexp.ListSeq(Sexp.Var("set!"), Sexp.Var(v), body) => Expr.Set(v, expr(body))
 
@@ -101,7 +101,7 @@ object Parser {
       Expr.App(expr(fun), args.map(expr))
 
     case Sexp.List(ImmArray()) =>
-      Expr.Scalar(Scalar.Nil)
+      Scalar.Nil
   }
 
   def mutual(sexps: Iterator[Sexp]): ImmArray[Def] = {

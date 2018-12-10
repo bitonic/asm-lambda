@@ -3,11 +3,11 @@ package org.francesco.asmlambda.compiler
 object Syntax {
   sealed trait SwitchCase
 
-  sealed trait Scalar
+  sealed trait Scalar extends Expr
   object Scalar {
     case class I64(v: Long) extends Scalar with SwitchCase
     case class F64(v: Double) extends Scalar
-    case class Text(v: String) extends Scalar
+    case class Text(v: String) extends Scalar with SwitchCase
     case class Bool(v: Boolean) extends Scalar
     case object Nil extends Scalar
     case class Symbol(sym: String) extends Scalar with SwitchCase
@@ -91,8 +91,6 @@ object Syntax {
     case class Var(v: String) extends Expr with SwitchCase
 
     case class Set(v: String, e: Expr) extends Expr
-
-    case class Scalar(s: Syntax.Scalar) extends Expr
 
     case class Map(fields: ImmArray[(Expr, Expr)]) extends Expr
     def mkMap(fields: (Expr, Expr)*): Expr = Map(ImmArray(fields: _*))

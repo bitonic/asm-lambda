@@ -3,7 +3,7 @@ package org.francesco.asmlambda.compiler
 import Syntax._
 import Syntax.{Expr => E}
 
-/** Renames so that there is no shadowing anywhere in the program */
+/** Renames so that there is no shadowing anywhere in the program. Also scope checks the program. */
 object NoShadowing {
   private type Counters = Map[String, Int]
 
@@ -41,7 +41,6 @@ object NoShadowing {
   private def expr(counters: Counters, e0: Expr): Expr = e0 match {
     case E.Var(v) => E.Var(varName(counters, v))
     case E.Set(v, e) => E.Set(varName(counters, v), expr(counters, e))
-    case E.Scalar(s) => E.Scalar(s)
     case E.Map(flds) => E.Map(flds.map { case (lbl, e) => (lbl, expr(counters, e)) })
     case E.Vector(els) => E.Vector(els.map(expr(counters, _)))
     case E.Lam(vars, body) =>
@@ -59,6 +58,8 @@ object NoShadowing {
             (i, mbBody.map(expr(counters, _)))
           case (sym: Scalar.Symbol, mbBody) =>
             (sym, mbBody.map(expr(counters, _)))
+          case (txt: Scalar.Text, mbBody) =>
+            (txt, mbBody.map(expr(counters, _)))
           case (E.Var(v), mbBody) =>
             val (newCounters, newV) = bumpVar(counters, v)
             (E.Var(newV), mbBody.map(expr(newCounters, _)))
@@ -66,6 +67,7 @@ object NoShadowing {
       )
     case E.Do(p) => E.Do(program(counters, p))
     case pop: PrimOp => pop
+    case scalar: Scalar => scalar
   }
 
   private def program(counters0: Counters, p0: Program): Program = {
