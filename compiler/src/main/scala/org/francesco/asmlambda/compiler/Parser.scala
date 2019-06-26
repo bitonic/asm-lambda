@@ -18,22 +18,19 @@ object Parser {
     "<" -> PrimOp.Less,
     ">" -> PrimOp.Greater,
     ">=" -> PrimOp.GreaterEq,
-    "vector-get" -> PrimOp.VectorGet,
-    "vector-set!" -> PrimOp.VectorSet,
-    "vector-len" -> PrimOp.VectorLen,
-    "vector-slice" -> PrimOp.VectorSlice,
-    "vector-new" -> PrimOp.VectorNew,
     "to-text" -> PrimOp.ToText,
     "not" -> PrimOp.Not,
     "or" -> PrimOp.Or,
     "and" -> PrimOp.And,
     "map-keys" -> PrimOp.MapKeys,
     "map-get" -> PrimOp.MapGet,
-    "map-put!" -> PrimOp.MapPut,
-    "copy" -> PrimOp.Copy,
+    "map-put" -> PrimOp.MapPut,
+    "vec-new" -> PrimOp.VectorNew,
+    "vec-get" -> PrimOp.VectorGet,
+    "vec-len" -> PrimOp.VectorLen,
   )
 
-  val reserved: Set[String] = Set("def", "let", "if", "fn", "do", "switch", "set!", "mutual")
+  val reserved: Set[String] = Set("def", "let", "if", "fn", "switch", "fst", "snd")
 
   private def checkArgsList(args: ImmArray[Sexp]): ImmArray[String] = {
     val varArgs = args.collect {
@@ -61,8 +58,6 @@ object Parser {
 
     case Sexp.Scalar(scalar) => scalar
 
-    case Sexp.ListSeq(Sexp.Var("set!"), Sexp.Var(v), body) => Expr.Set(v, expr(body))
-
     case Sexp.Map(els) =>
       if (els.length % 2 == 0) {
         val builder = IA.newBuilder[(Expr, Expr)]
@@ -74,70 +69,45 @@ object Parser {
         throw ParseError(s"Got odd numbers of elements in map expression: $els")
       }
 
-    case Sexp.Vector(els) => Expr.Vector(els.map(expr))
+    case Sexp.Vector(els) =>
+      val builder = IA.newBuilder[Expr]
+      for (el <- els) {
+        builder += expr(el)
+      }
+      Expr.Vector(builder.result())
 
-    case Sexp.ListSeq(Sexp.Var("fn"), Sexp.Vector(args), body @ _*) =>
-      Expr.Lam(checkArgsList(args), program(body.iterator))
+    case Sexp.PairSeq() =>
+      Expr.Nil
+
+    case Sexp.ListSeq(Sexp.Var("fn"), Sexp.Vector(args), body) =>
+      Expr.Lam(checkArgsList(args), expr(body))
 
     case Sexp.ListSeq(Sexp.Var("if"), cond, l) =>
       Expr.ITE(expr(cond), expr(l), None)
 
-    case Sexp.ListSeq(Sexp.Var("switch"), e, scases @ _*) =>
-      val cases: ImmArray[(SwitchCase, Option[Expr])] = ImmArray(scases: _*).map {
+    case Sexp.ListSeq(Sexp.Var("if"), cond, l, r) =>
+      Expr.ITE(expr(cond), expr(l), Some(expr(r)))
+
+    case Sexp.ListSeq(Sexp.Var("switch"), e, Sexp.Vector(scases)) =>
+      val cases: ImmArray[(SwitchCase, Option[Expr])] = scases.map {
         case Sexp.VectorSeq(ValidVar(v)) => (Expr.Var(v), None)
         case Sexp.VectorSeq(ValidVar(v), body) => (Expr.Var(v), Some(expr(body)))
-        case Sexp.VectorSeq(Sexp.Scalar(sym: Scalar.Symbol)) => (sym, None)
-        case Sexp.VectorSeq(Sexp.Scalar(sym: Scalar.Symbol), body) => (sym, Some(expr(body)))
         case Sexp.VectorSeq(Sexp.Scalar(i: Scalar.I64)) => (i, None)
         case Sexp.VectorSeq(Sexp.Scalar(i: Scalar.I64), body) => (i, Some(expr(body)))
         case scase => throw ParseError(s"Bad switch case: $scase")
       }
       Expr.Switch(expr(e), cases)
 
+    case Sexp.ListSeq(Sexp.Var("let"), ValidVar(v), bound) =>
+      Expr.Let(v, expr(bound))
+
+    case Sexp.ListSeq(Sexp.Var("def"), ValidVar(v), Sexp.Vector(args), body) =>
+      Expr.Def(v, checkArgsList(args), expr(body))
+
     case Sexp.ListSeq(Sexp.Var("do"), body @ _*) =>
-      Expr.Do(program(body.iterator))
+      Expr.Do(ImmArray(body: _*).map(expr))
 
-    case Sexp.List(IA.Cons(fun, args)) =>
+    case Sexp.List(ImmArrayCons(fun, args)) =>
       Expr.App(expr(fun), args.map(expr))
-
-    case Sexp.List(ImmArray()) =>
-      Scalar.Nil
-  }
-
-  def mutual(sexps: Iterator[Sexp]): ImmArray[Def] = {
-    val builder = IA.newBuilder[Def]
-    val names = mutable.Set[String]()
-
-    for (sexp <- sexps) {
-      sexp match {
-        case Sexp.ListSeq(Sexp.Var("def"), Sexp.Var(v), Sexp.Vector(args), body @ _*) =>
-          if (names.contains(v)) {
-            throw ParseError(s"Duplicate name $v in mutual block")
-          }
-          builder += Def(v, checkArgsList(args), program(body.iterator))
-        case _ => ParseError(s"Unexpected non-def s-exp in mutual block")
-      }
-    }
-
-    builder.result()
-  }
-
-  def program(sexps: Iterator[Sexp]): Program = {
-    val builder = IA.newBuilder[Form]
-
-    for (sexp <- sexps) {
-      sexp match {
-        case Sexp.ListSeq(Sexp.Var("let"), Sexp.Var(v), body) =>
-          builder += Form.Let(v, expr(body))
-        case Sexp.ListSeq(Sexp.Var("def"), Sexp.Var(v), Sexp.Vector(args), body @ _*) =>
-          builder += Form.Defs(ImmArray(Def(v, checkArgsList(args), program(body.iterator))))
-        case Sexp.ListSeq(Sexp.Var("mutual"), body @ _*) =>
-          builder += Form.Defs(mutual(body.iterator))
-        case _ =>
-          builder += Form.Expr(expr(sexp))
-      }
-    }
-
-    Program(builder.result())
   }
 }

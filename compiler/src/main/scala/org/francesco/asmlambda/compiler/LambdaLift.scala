@@ -1,10 +1,10 @@
 package org.francesco.asmlambda.compiler
 
 import org.francesco.asmlambda.compiler.Syntax.Scalar
-
 import scala.collection.mutable
 
 private class LambdaLift {
+  /*
   import LambdaLift._
 
   val generatedDefnCounters: mutable.Map[String, Int] = mutable.Map.empty
@@ -81,21 +81,26 @@ private class LambdaLift {
           (Expr.DynamicCall(newFun, newArgs), argsFreeVars ++ funFreeVars)
         }
         fun match {
-          case pop: Syntax.PrimOp => if (args.length == pop.arity) {
-            (Expr.PrimOpCall(pop, newArgs), argsFreeVars)
-          } else {
-            throw new RuntimeException(s"Got ${args.length} arguments for prim op $pop, while I expected ${pop.arity}")
-          }
-          case Syntax.Expr.Var(v) => names(v) match {
-            case Name.Def(defName, capturedArgs, argsArity) => if (args.length == argsArity) {
-              (Expr.StaticCall(defName, capturedArgs, newArgs), argsFreeVars)
+          case pop: Syntax.PrimOp =>
+            if (args.length == pop.arity) {
+              (Expr.PrimOpCall(pop, newArgs), argsFreeVars)
             } else {
-              throw new RuntimeException(s"Got ${args.length} arguments for def $defName, while I expected $argsArity")
+              throw new RuntimeException(
+                s"Got ${args.length} arguments for prim op $pop, while I expected ${pop.arity}")
             }
-            case Name.Var => default
-          }
+          case Syntax.Expr.Var(v) =>
+            names(v) match {
+              case Name.Def(defName, capturedArgs, argsArity) =>
+                if (args.length == argsArity) {
+                  (Expr.StaticCall(defName, capturedArgs, newArgs), argsFreeVars)
+                } else {
+                  throw new RuntimeException(
+                    s"Got ${args.length} arguments for def $defName, while I expected $argsArity")
+                }
+              case Name.Var => default
+            }
           case _ => default
-      }
+        }
       case pop: Syntax.PrimOp => throw new RuntimeException(s"Got naked primop $pop")
       case Syntax.Expr.Do(p) =>
         val (newP, pVars) = program(containingDefName, names, p)
@@ -133,6 +138,7 @@ object LambdaLift {
     case class StaticCall(defName: String, capturedArgs: ImmArray[String], args: ImmArray[Expr])
         extends Expr
     case class DynamicCall(fun: Expr, args: ImmArray[Expr]) extends Expr
+
     /** The args must be equal to the arity of the pop */
     case class PrimOpCall(pop: Syntax.PrimOp, args: ImmArray[Expr]) extends Expr
     case class ITE(cond: Expr, l: Expr, r: Option[Expr]) extends Expr
@@ -149,10 +155,13 @@ object LambdaLift {
 
   private sealed trait Name
   private object Name {
+
     /** this name derives from a let- or lam-bound variable */
     case object Var extends Name
+
     /** this name comes from a definition, with the given captured args applied. */
     case class Def(fullDefName: String, capturedArgs: ImmArray[String], argsArity: Int) extends Name
   }
   private type Names = Map[String, Name]
+   */
 }

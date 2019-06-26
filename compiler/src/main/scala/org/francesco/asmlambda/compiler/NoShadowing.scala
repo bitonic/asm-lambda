@@ -5,6 +5,7 @@ import Syntax.{Expr => E}
 
 /** Renames so that there is no shadowing anywhere in the program. Also scope checks the program. */
 object NoShadowing {
+  /*
   private type Counters = Map[String, Int]
 
   private def varName(counters: Counters, v: String): String = {
@@ -86,13 +87,13 @@ object NoShadowing {
           // Note that we _know_ that the names in `defs0` do not shadow each other, but they
           // might shadow previous names.
           var newCounters1 = counters
-          val defs1 = defs0.map{
+          val defs1 = defs0.map {
             case Def(v, args, program) =>
               var (newCounters2, newV) = bumpVar(newCounters1, v)
               newCounters1 = newCounters2
               Def(newV, args, program)
           }
-          val defs2 = defs1.map{
+          val defs2 = defs1.map {
             case Def(newV, args, p) =>
               val (newCounters2, newArgs) = telescope(newCounters1, args)
               Def(newV, newArgs, program(newCounters2, p))
@@ -105,4 +106,5 @@ object NoShadowing {
   }
 
   def apply(p: Program): Program = program(Map.empty, p)
+   */
 }

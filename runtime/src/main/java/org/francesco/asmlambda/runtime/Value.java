@@ -10,12 +10,12 @@ import java.util.*;
  * * F64 => {@link Double}
  * * Text => {@link String}
  * * Bool => {@link Boolean}
- * * Symbol => {@link Symbol}
+ * * Pair => {@link Pair}
  * * Vector => {@link Object[]}
  * * Map => {@link HashMap}
  * * functions => {@link Functions.Function}
  *
- * Generally speaking we _do not_ define our own classes for values, as you can see above. {@link Symbol} and
+ * Generally speaking we _do not_ define our own classes for values, as you can see above.
  * {@link Functions.Function} are the exception because the Java ecosystem does not provide us with some ready-made
  * solution for those types.
  *
@@ -32,11 +32,12 @@ public final class Value {
     CLOSE_BRACE,
     CLOSE_BRACKET,
     CLOSE_PARENS,
+    CLOSE_ANGLE
   }
 
   /**
    * Converts a value to a parseable string. In other words, you should be able to paste the output of this in
-   * asm-lambda source code.
+   * asm-lambda source code. Unless there are functions inside, of course.
    */
   public static Object toText(Object e0) {
     var instructions = new Stack<ToTextInstruction>();
@@ -54,7 +55,7 @@ public final class Value {
           var value = values.pop();
 
           if (value == null) {
-            stringBuilder.append("()");
+            stringBuilder.append("<>");
           } else if (value instanceof Long) {
             stringBuilder.append(value);
           } else if (value instanceof Double) {
@@ -63,9 +64,13 @@ public final class Value {
             escapeString(stringBuilder, (String) value);
           } else if (value instanceof Boolean) {
             stringBuilder.append(value);
-          } else if (value instanceof Symbol) {
-            stringBuilder.append(":");
-            stringBuilder.append(((Symbol) value).string);
+          } else if (value instanceof Pair) {
+            Pair pair = (Pair) value;
+            stringBuilder.append("<");
+            instructions.push(ToTextInstruction.CLOSE_ANGLE);
+            values.push(pair.snd);
+            instructions.push(ToTextInstruction.SPACE);
+            values.push(pair.fst);
           } else if (value instanceof Object[]) {
             Object[] vec = (Object[]) value;
             stringBuilder.append("[");
@@ -102,11 +107,6 @@ public final class Value {
             }
           } else if (value instanceof Functions.Function) {
             stringBuilder.append("<function>");
-          } else if (value instanceof WrappedValue) {
-            // optimization so that we can use the HashMap method directly rather than mapGet / mapKeys /
-            // setContains / setKeys
-            instructions.push(ToTextInstruction.VALUE);
-            values.push(((WrappedValue) value).value);
           } else {
             throw new RuntimeException("Expected value in toText(), but got " + value.getClass());
           }
@@ -120,6 +120,8 @@ public final class Value {
         case CLOSE_BRACKET:
           stringBuilder.append("]");
           break;
+        case CLOSE_ANGLE:
+          stringBuilder.append(">");
         case COMMA:
           stringBuilder.append(", ");
           break;
@@ -199,10 +201,13 @@ public final class Value {
         if (!l.equals(r)) return false;
       } else if (l instanceof Boolean && r instanceof Boolean) {
         if (!l.equals(r)) return false;
-      } else if (l instanceof Symbol && r instanceof Symbol) {
-        var sym1 = (Symbol) l;
-        var sym2 = (Symbol) r;
-        if (sym1.token != sym2.token) return false;
+      } else if (l instanceof Pair && r instanceof Pair) {
+        Pair pair1 = (Pair) l;
+        Pair pair2 = (Pair) r;
+        left.push(pair1.fst);
+        right.push(pair2.fst);
+        left.push(pair1.snd);
+        right.push(pair2.snd);
       } else if (l instanceof Object[] && r instanceof Object[][]) {
         var arr1 = (Object[]) l;
         var arr2 = (Object[]) r;
@@ -213,11 +218,6 @@ public final class Value {
           left.push(arr1[i]);
           right.push(arr2[i]);
         }
-      } else if (l instanceof WrappedValue && r instanceof WrappedValue) {
-        // optimization so that we can use the HashMap method directly rather than mapGet / mapKeys /
-        // setContains / setKeys
-        left.push(((WrappedValue) l).value);
-        right.push(((WrappedValue) r).value);
       } else if (l instanceof HashMap && r instanceof HashMap) {
         var rec1 = (HashMap) l;
         var rec2 = (HashMap) r;
@@ -247,123 +247,43 @@ public final class Value {
       return eqBool(e1, e2);
   }
 
-  public static int hashCodeInt(Object e0) {
-    var toHash = new Stack<>();
-    toHash.push(e0);
-
-    int hash = 1;
-
-    /*
-     * we don't really hash in a "tagged" way, for example an array might have the same hash as a map. but that's ok, we
-     * optimize for the common case -- when the key type is homogeneous.
-     */
-    while(!toHash.isEmpty()) {
-      var v = toHash.pop();
-
-      if (v == null) {
-        // no op
-      } else if (v instanceof Long || v instanceof Double || v instanceof String || v instanceof Boolean || v instanceof Symbol) {
-        // scalars go in directly
-        hash = 31 * hash + v.hashCode();
-      } else if (v instanceof Object[]) {
-        var arr = (Object[]) v;
-        for (Object el : arr) {
-          toHash.push(el);
-        }
-      } else if (v instanceof HashMap) {
-        HashMap<Object, Object> map = (HashMap<Object, Object>) v;
-        for (Map.Entry<Object, Object> entry : map.entrySet()) {
-          toHash.push(entry.getValue());
-          toHash.push(entry.getKey());
-        }
-      } else if (v instanceof WrappedValue) {
-        // optimization so that we can use the HashMap method directly rather than mapGet / mapKeys /
-        // setContains / setKeys
-        toHash.push(((WrappedValue) v).value);
-      } else {
-        throw new RuntimeException("Couldn't hash bad value of type " + v.getClass());
-      }
-    }
-
-    return hash;
-  }
-
-  public static Object hashCode(Object e) {
-    return Long.valueOf(hashCodeInt(e));
-  }
-
-  /**
-   * We need to wrap compound keys when we put them in sets / maps to have proper {@link Object#hashCode()} and
-   * {@link Object#equals(Object)}. The primitive operations defined here do the wrapping and unwrapping as appropriate.
-   */
-  private static Object wrapNonScalars(Object value) {
-    if (value instanceof Object[] || value instanceof HashMap) {
-      return new WrappedValue(value);
-    }
-    return value;
-  }
-
-  private static Object unwrap(Object value) {
-    if (value instanceof WrappedValue) {
-      return ((WrappedValue) value).value;
-    }
-    return value;
-  }
-
   public static Object mapNew() {
-    return new HashMap();
+    return new StringHAMT();
   }
 
   public static Object mapKeys(Object map0) {
-    if (!(map0 instanceof HashMap)) {
+    if (!(map0 instanceof StringHAMT)) {
       throw new RuntimeException("Can't call mapKeys on value of type " + map0.getClass());
     }
-    HashMap map = (HashMap) map0;
+    StringHAMT map = (StringHAMT) map0;
 
-    Object[] keys = new Object[map.size()];
-    int ix = 0;
-    for (Object k : map.keySet()) {
-      keys[ix] = unwrap(k);
-      ix++;
-    }
-
-    return keys;
+    return map.keys();
   }
 
-  public static Object mapPut(Object map0, Object k, Object v) {
-    if (!(map0 instanceof HashMap)) {
+  public static Object mapPut(Object map0, Object k0, Object v) {
+    if (!(map0 instanceof StringHAMT)) {
       throw new RuntimeException("Can't call mapPut on value of type " + map0.getClass());
     }
-    HashMap map = (HashMap) map0;
+    StringHAMT map = (StringHAMT) map0;
+    if (!(k0 instanceof String)) {
+      throw new RuntimeException("Can't call mapPut on key of type " + k0.getClass());
+    }
+    String k = (String) k0;
 
-    map.put(wrapNonScalars(k), v);
-
-    return null;
+    return map.put(k, v);
   }
 
-  public static Object mapContains(Object map0, Object k) {
-    if (!(map0 instanceof HashMap)) {
+  public static Object mapGet(Object map0, Object k0) {
+    if (!(map0 instanceof StringHAMT)) {
       throw new RuntimeException("Can't call mapGet on value of type " + map0.getClass());
     }
-    HashMap map = (HashMap) map0;
-
-    return map.containsKey(wrapNonScalars(k));
-  }
-
-  public static Object mapGet(Object map0, Object k) {
-    if (!(map0 instanceof HashMap)) {
-      throw new RuntimeException("Can't call mapGet on value of type " + map0.getClass());
+    StringHAMT map = (StringHAMT) map0;
+    if (!(k0 instanceof String)) {
+      throw new RuntimeException("Can't call mapGet on key of type " + k0.getClass());
     }
-    HashMap map = (HashMap) map0;
+    String k = (String) k0;
 
-    var wrappedKey = wrapNonScalars(k);
-
-    // we can't simply check for null after get we have null as a possible value.
-    if (!map.containsKey(wrappedKey)) {
-      throw new RuntimeException("Can't fetch key " + wrappedKey.toString() + " in mapGet");
-    }
-
-    return map.get(wrappedKey);
+    return map.get(k);
   }
 
   public static Object add(Object e1, Object e2) {
@@ -481,6 +401,10 @@ public final class Value {
         "Cannot && operands of type " + e1.getClass() + " and type " + e2.getClass());
   }
 
+  public static Object vectorNew(Object... args) {
+    return args;
+  }
+
   public static Object vectorGet(Object e0, Object ix0) {
     if (!(e0 instanceof Object[] && ix0 instanceof Long)) {
       throw new RuntimeException("Cannot run vectorGet on arguments of type " + e0.getClass() + " and " + ix0.getClass());
@@ -490,13 +414,24 @@ public final class Value {
     return arr[ix];
   }
 
-  public static Object vectorSet(Object arr0, Object ix0, Object v) {
-    if (!(arr0 instanceof Object[] && ix0 instanceof Long)) {
-      throw new RuntimeException("Cannot run vectorSet on arguments of type " + arr0.getClass() + " and " + ix0.getClass());
+  public static Object vectorLen(Object v0) {
+    if (!(v0 instanceof Object[])) {
+      throw new RuntimeException("Cannot run vectorLen on argument of type " + v0.getClass());
     }
-    var arr = (Object[]) arr0;
-    var ix = (int) (long) ix0;
-    arr[ix] = v;
-    return null;
+    return (long) ((Object[]) v0).length;
+  }
+
+  public static Object pairFst(Object pair0) {
+    if (!(pair0 instanceof Pair)) {
+      throw new RuntimeException("Cannot run pairFst on argument of type " + pair0.getClass());
+    }
+    return ((Pair) pair0).fst;
+  }
+
+  public static Object pairSnd(Object pair0) {
+    if (!(pair0 instanceof Pair)) {
+      throw new RuntimeException("Cannot run pairSnd on argument of type " + pair0.getClass());
+    }
+    return ((Pair) pair0).snd;
   }
 }

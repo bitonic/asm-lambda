@@ -14,11 +14,11 @@ class SexpSpec extends FreeSpec with Matchers {
   implicit def stringSexp(s: String): Sexp = Sexp.Var(s)
   def txt(txt: String): Sexp = Sexp.Scalar(Syntax.Scalar.Text(txt))
   val nil: Sexp = Sexp.Scalar(Syntax.Scalar.Nil)
-  def sym(v: String): Sexp = Sexp.Scalar(Syntax.Scalar.Symbol(v))
 
   def map(els: Sexp*): Sexp = Sexp.Seq(SeqKind.Map, ImmArray(els: _*))
   def list(els: Sexp*): Sexp = Sexp.Seq(SeqKind.List, ImmArray(els: _*))
   def vec(els: Sexp*): Sexp = Sexp.Seq(SeqKind.Vector, ImmArray(els: _*))
+  def pair(els: Sexp*): Sexp = Sexp.Seq(SeqKind.Pair, ImmArray(els: _*))
 
   def sexps(xs: Sexp*): ImmArray[Sexp] = ImmArray(xs: _*)
 
@@ -86,12 +86,6 @@ class SexpSpec extends FreeSpec with Matchers {
     "with comment" in {
       Reader("one;two") shouldBe sexps("one")
     }
-
-    // I think it makes more sense this way -- having the symbol to follow the variable with no whitespace seems counter
-    // intuitive
-    "trailing symbol" in {
-      Reader("one:two") shouldBe sexps("one:two")
-    }
   }
 
   "booleans" in {
@@ -99,7 +93,7 @@ class SexpSpec extends FreeSpec with Matchers {
   }
 
   "nil" in {
-    Reader("()") shouldBe sexps(list())
+    Reader("<>") shouldBe sexps(pair())
   }
 
   "lists" in {
@@ -108,22 +102,6 @@ class SexpSpec extends FreeSpec with Matchers {
         list("a", vec("b", "c"), "d", map("e", vec("f", list("g")))),
         list("simpler-list"),
         list())
-  }
-
-  "symbol" - {
-    "simple" in {
-      Reader(":foo") shouldBe sexps(sym("foo"))
-      ()
-    }
-
-    "not-scalars" in {
-      Reader(":true :false :nil") shouldBe sexps(sym("true"), sym("false"), sym("nil"))
-      ()
-    }
-
-    "only colon" in {
-      the [ReaderError] thrownBy Reader(":") should have message "Unexpected end of input, expected initial identifier character"
-    }
   }
 
   "strings" - {

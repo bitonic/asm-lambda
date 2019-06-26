@@ -18,6 +18,9 @@ object SeqKind {
   case object Map extends SeqKind {
     val name: String = "map"
   }
+  case object Pair extends SeqKind {
+    val name: String = "pair"
+  }
 }
 
 sealed trait Sexp
@@ -39,25 +42,40 @@ object Sexp {
     def unapply(sexp: Sexp): Option[ImmArray[Sexp]] = unapplyKindIA(SeqKind.List, sexp)
   }
   object ListSeq {
-    def unapplySeq(sexp: Sexp): Option[scala.collection.Seq[Sexp]] = unapplyKindSeq(SeqKind.List, sexp)
+    def unapplySeq(sexp: Sexp): Option[scala.collection.Seq[Sexp]] =
+      unapplyKindSeq(SeqKind.List, sexp)
   }
 
   object Vector {
     def unapply(sexp: Sexp): Option[ImmArray[Sexp]] = unapplyKindIA(SeqKind.Vector, sexp)
   }
   object VectorSeq {
-    def unapplySeq(sexp: Sexp): Option[scala.collection.Seq[Sexp]] = unapplyKindSeq(SeqKind.Vector, sexp)
+    def unapplySeq(sexp: Sexp): Option[scala.collection.Seq[Sexp]] =
+      unapplyKindSeq(SeqKind.Vector, sexp)
   }
 
   object Map {
     def unapply(sexp: Sexp): Option[ImmArray[Sexp]] = unapplyKindIA(SeqKind.Map, sexp)
   }
   object MapSeq {
-    def unapplySeq(sexp: Sexp): Option[scala.collection.Seq[Sexp]] = unapplyKindSeq(SeqKind.Map, sexp)
+    def unapplySeq(sexp: Sexp): Option[scala.collection.Seq[Sexp]] =
+      unapplyKindSeq(SeqKind.Map, sexp)
+  }
+
+  object Pair {
+    def unapply(sexp: Sexp): Option[ImmArray[Sexp]] = unapplyKindIA(SeqKind.Pair, sexp)
+  }
+  object PairSeq {
+    def unapplySeq(sexp: Sexp): Option[scala.collection.Seq[Sexp]] =
+      unapplyKindSeq(SeqKind.Pair, sexp)
   }
 }
 
-case class ReaderError(cursor: Int, topLevel: ImmArray[Sexp], context: List[(SeqKind, ImmArray[Sexp])], msg: String)
+case class ReaderError(
+    cursor: Int,
+    topLevel: ImmArray[Sexp],
+    context: List[(SeqKind, ImmArray[Sexp])],
+    msg: String)
     extends Throwable(msg)
 
 final private class Reader(input: String, allowDollarInIdentifier: Boolean = false) {
@@ -92,7 +110,9 @@ final private class Reader(input: String, allowDollarInIdentifier: Boolean = fal
   }
 
   def fail(s: String) =
-    throw ReaderError(cursor, topLevel.result(), context.map{ case (lk, sexps) => (lk, sexps.result()) }, s)
+    throw ReaderError(cursor, topLevel.result(), context.map {
+      case (lk, sexps) => (lk, sexps.result())
+    }, s)
 
   def assertNoEnd(what: String): Unit = {
     if (cursor >= input.length) {
@@ -150,9 +170,9 @@ final private class Reader(input: String, allowDollarInIdentifier: Boolean = fal
   def close(acceptedKind: SeqKind): Unit = {
     context match {
       case Nil =>
-        fail(s"Got closing character for ${acceptedKind.name} at the top level")
+        fail(s"Got closing character for one of ${acceptedKind.name} at the top level")
       case (kind, els) :: rest =>
-        if (kind == acceptedKind) {
+        if (acceptedKind == kind) {
           context = rest
           push(Sexp.Seq(kind, els.result()))
         } else {
@@ -176,7 +196,8 @@ final private class Reader(input: String, allowDollarInIdentifier: Boolean = fal
   }
 
   def isDigit(ch: Char): Boolean = ch >= '0' && ch <= '9'
-  def isHex(ch: Char): Boolean = (ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f') || (ch >= 'A' && ch <= 'F')
+  def isHex(ch: Char): Boolean =
+    (ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f') || (ch >= 'A' && ch <= 'F')
 
   def string(): String = {
     expect('"')
@@ -200,7 +221,8 @@ final private class Reader(input: String, allowDollarInIdentifier: Boolean = fal
             val u2 = satisfy("hexadecimal digit for unicode sequence", isHex)
             val u3 = satisfy("hexadecimal digit for unicode sequence", isHex)
             val u4 = satisfy("hexadecimal digit for unicode sequence", isHex)
-            stringBuilder ++= Character.toChars(Integer.parseInt(Array(u1, u2, u3, u4).mkString, 16))
+            stringBuilder ++= Character.toChars(
+              Integer.parseInt(Array(u1, u2, u3, u4).mkString, 16))
           } else {
             stringBuilder += escapable(escaped)
           }
@@ -247,9 +269,9 @@ final private class Reader(input: String, allowDollarInIdentifier: Boolean = fal
 
   val identifierInitial: Set[Char] =
     Set('a' to 'z': _*) ++
-        Set('A' to 'Z': _*) ++
-        Set('!', '%', '&', '*', '/', '<', '=', '>', '?', '~', '_', '^', '+', '-') ++
-        (if (allowDollarInIdentifier) { Set('$') } else { Set.empty })
+      Set('A' to 'Z': _*) ++
+      Set('!', '%', '&', '*', '/', '<', '=', '>', '?', '~', '_', '^', '+', '-') ++
+      (if (allowDollarInIdentifier) { Set('$') } else { Set.empty })
   def identifier(): String = {
     val stringBuilder = new StringBuilder()
     stringBuilder += satisfy("initial identifier character", identifierInitial.contains)
@@ -282,17 +304,13 @@ final private class Reader(input: String, allowDollarInIdentifier: Boolean = fal
     Character.TITLECASE_LETTER,
     Character.MODIFIER_LETTER,
     Character.OTHER_LETTER,
-
     Character.NON_SPACING_MARK,
-
     Character.DECIMAL_DIGIT_NUMBER,
     Character.LETTER_NUMBER,
     Character.OTHER_NUMBER,
-
     Character.CONNECTOR_PUNCTUATION,
     Character.DASH_PUNCTUATION,
     Character.OTHER_PUNCTUATION,
-
     Character.MATH_SYMBOL,
     Character.CURRENCY_SYMBOL,
     Character.MODIFIER_LETTER,
@@ -352,12 +370,13 @@ final private class Reader(input: String, allowDollarInIdentifier: Boolean = fal
           enter(SeqKind.Map)
         case '}' =>
           close(SeqKind.Map)
+        case '<' =>
+          enter(SeqKind.Pair)
+        case '>' =>
+          close(SeqKind.Pair)
         case '"' =>
           cursor -= 1
           push(Sexp.Scalar(Scalar.Text(string())))
-        case ':' =>
-          val s = identifier()
-          push(Sexp.Scalar(Scalar.Symbol(s)))
         case ';' =>
           eatUntilNewline()
         case _ =>
@@ -370,11 +389,14 @@ final private class Reader(input: String, allowDollarInIdentifier: Boolean = fal
         ()
       } else {
         val toClose = context.map {
-          case (kind, _) => kind match {
-            case SeqKind.List => ')'
-            case SeqKind.Vector => ']'
-            case SeqKind.Map => '}'
-          }}.mkString
+          case (kind, _) =>
+            kind match {
+              case SeqKind.List => ')'
+              case SeqKind.Vector => ']'
+              case SeqKind.Map => '}'
+              case SeqKind.Pair => '>'
+            }
+        }.mkString
         fail(s"Unexpected end of input, still need to close $toClose")
       }
     }

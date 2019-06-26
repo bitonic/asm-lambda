@@ -79,10 +79,11 @@ object QueensBench {
       val pkg = LambdaLift.`package`(
         Rename.`package`(fastparse.parse(source, Reader.`package`(_)).get.value))
       val run = Compiler.compileToFunction("org.francesco.asmlambda.bench.Queens", pkg)
-      () => {
-        val res = run.apply()
-        assert(res == java.lang.Long.valueOf(724))
-      }
+      () =>
+        {
+          val res = run.apply()
+          assert(res == java.lang.Long.valueOf(724))
+        }
     }
   }
 }
@@ -98,32 +99,35 @@ class QueensBench {
   def scalaQueens(): Unit = {
     def diff(xs0: List[Int], ys0: List[Int]): List[Int] = xs0 match {
       case Nil => Nil
-      case x :: xs => ys0 match {
-        case Nil => xs0
-        case y :: ys =>
-          if (x < y) {
-            x :: diff(xs, ys0)
-          } else if (x == y) {
-            diff(xs, ys)
-          } else {
-            diff(xs0, ys)
-          }
-      }
+      case x :: xs =>
+        ys0 match {
+          case Nil => xs0
+          case y :: ys =>
+            if (x < y) {
+              x :: diff(xs, ys0)
+            } else if (x == y) {
+              diff(xs, ys)
+            } else {
+              diff(xs0, ys)
+            }
+        }
     }
 
-    def range(m: Int, n: Int): List[Int] = if (m <= n) {
-      m :: range(m+1, n)
-    } else {
-      Nil
-    }
+    def range(m: Int, n: Int): List[Int] =
+      if (m <= n) {
+        m :: range(m + 1, n)
+      } else {
+        Nil
+      }
 
     def solveAux(ints: List[Int], kss0: List[List[Int]]): List[List[Int]] = kss0 match {
       case Nil => Nil :: Nil
       case ks :: kss =>
-        ks.flatMap(k =>
-          solveAux(
-            ints,
-            (kss, ints).zipped map { case (ls, i) => diff(ls, List(k-i, k, k+i)) }).map(k :: _))
+        ks.flatMap(
+          k =>
+            solveAux(ints, (kss, ints).zipped map {
+              case (ls, i) => diff(ls, List(k - i, k, k + i))
+            }).map(k :: _))
     }
 
     def solve(n: Int): List[List[Int]] = {
