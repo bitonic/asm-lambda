@@ -100,22 +100,35 @@ object Syntax {
     case class Vector(elements: ImmArray[Expr]) extends Expr
     def mkVector(els: Expr*): Expr = Vector(ImmArray(els: _*))
 
-    case object Nil extends Expr
     case class Pair(fst: Expr, snd: Expr) extends Expr
 
-    case class Lam(args: ImmArray[String], body: Expr) extends Expr
+    case class Lam(args: ImmArray[String], body: Program) extends Expr
 
     case class App(fun: Expr, args: ImmArray[Expr]) extends Expr
     def mkApp(fun: Expr, args: Expr*): Expr = App(fun, ImmArray(args: _*))
 
-    case class Switch(scrutined: Expr, cases: ImmArray[(SwitchCase, Option[Expr])]) extends Expr
+    case class Switch(scrutined: Expr, cases: ImmArray[(SwitchCase, Expr)]) extends Expr
 
     case class ITE(scrutined: Expr, l: Expr, r: Option[Expr]) extends Expr
 
-    case class Let(v: String, bound: Expr) extends Expr
-
-    case class Def(v: String, args: ImmArray[String], rest: Expr) extends Expr
-
-    case class Do(statements: ImmArray[Expr]) extends Expr
+    case class Do(body: Program) extends Expr
   }
+
+  sealed trait Form
+  object Form {
+    /** A group of (possibly) mutually recursive functions. All names _must_ be distinct. */
+    case class Defs(defs: ImmArray[Def]) extends Form
+    def mkDefs(defs: Def*): Defs = Defs(ImmArray(defs: _*))
+
+    case class Let(v: String, bound: Syntax.Program) extends Form
+
+    /** A naked expression */
+    case class Expr(expr: Syntax.Expr) extends Form
+  }
+
+  case class Def(v: String, args: ImmArray[String], body: Program)
+
+  /** if the program doesn't end with an expression Nil will be returned. */
+  case class Program(forms: ImmArray[Form])
+  def mkProgram(forms: Form*): Program = Program(ImmArray(forms: _*))
 }

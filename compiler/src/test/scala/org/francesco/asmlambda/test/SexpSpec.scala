@@ -93,15 +93,26 @@ class SexpSpec extends FreeSpec with Matchers {
   }
 
   "nil" in {
-    Reader("<>") shouldBe sexps(pair())
+    Reader("[]") shouldBe sexps(pair())
   }
 
   "lists" in {
-    Reader("(a [b c] d {e [f (g)]}) (simpler-list) ()") shouldBe
+    Reader("""(a #[b c] d {e #[f (g)]}) (simpler-list) ()""") shouldBe
       sexps(
         list("a", vec("b", "c"), "d", map("e", vec("f", list("g")))),
         list("simpler-list"),
-        list())
+        list(),
+      )
+  }
+
+  "pairs" in {
+    Reader("""[] [1 2 3] [true] [#[f "bar"] x]""") shouldBe
+      sexps(
+        pair(),
+        pair(1, 2, 3),
+        pair(true),
+        pair(vec("f", txt("bar")), "x"),
+      )
   }
 
   "strings" - {

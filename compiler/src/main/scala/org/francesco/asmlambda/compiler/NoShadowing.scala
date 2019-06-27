@@ -3,9 +3,9 @@ package org.francesco.asmlambda.compiler
 import Syntax._
 import Syntax.{Expr => E}
 
+/*
 /** Renames so that there is no shadowing anywhere in the program. Also scope checks the program. */
 object NoShadowing {
-  /*
   private type Counters = Map[String, Int]
 
   private def varName(counters: Counters, v: String): String = {
@@ -39,34 +39,39 @@ object NoShadowing {
     (newCounters, ImmArray(reverseVars.reverse: _*))
   }
 
-  private def expr(counters: Counters, e0: Expr): Expr = e0 match {
-    case E.Var(v) => E.Var(varName(counters, v))
-    case E.Set(v, e) => E.Set(varName(counters, v), expr(counters, e))
-    case E.Map(flds) => E.Map(flds.map { case (lbl, e) => (lbl, expr(counters, e)) })
-    case E.Vector(els) => E.Vector(els.map(expr(counters, _)))
+  private def expr(counters: Counters, e0: Expr): (Counters, Expr) = e0 match {
+    case E.Var(v) => (counters, E.Var(varName(counters, v)))
+    case E.Map(flds) => (counters, E.Map(flds.map { case (lbl, e) => (lbl, expr(counters, e)._2) }))
+    case E.Vector(els) => (counters, E.Vector(els.map(expr(counters, _)._2)))
     case E.Lam(vars, body) =>
       val (newCounters, newArgs) = telescope(counters, vars)
-      E.Lam(newArgs, program(newCounters, body))
+      (counters, E.Lam(newArgs, expr(newCounters, body)._2))
     case E.App(fun, args) =>
-      E.App(expr(counters, fun), args.map(expr(counters, _)))
+      (counters, E.App(expr(counters, fun)._2, args.map(expr(counters, _)._2)))
     case E.ITE(cond, l, r) =>
-      E.ITE(expr(counters, cond), expr(counters, l), r.map(expr(counters, _)))
+      (counters, E.ITE(expr(counters, cond)._2, expr(counters, l)._2, r.map(expr(counters, _)._2))
     case E.Switch(e, cases) =>
-      E.Switch(
-        expr(counters, e),
-        cases.map {
-          case (i: Scalar.I64, mbBody) =>
-            (i, mbBody.map(expr(counters, _)))
-          case (sym: Scalar.Symbol, mbBody) =>
-            (sym, mbBody.map(expr(counters, _)))
-          case (txt: Scalar.Text, mbBody) =>
-            (txt, mbBody.map(expr(counters, _)))
-          case (E.Var(v), mbBody) =>
-            val (newCounters, newV) = bumpVar(counters, v)
-            (E.Var(newV), mbBody.map(expr(newCounters, _)))
-        }
+      (
+        counters,
+          E.Switch(
+            expr(counters, e)._2,
+            cases.map {
+              case (i: Scalar.I64, mbBody) =>
+                (i, mbBody.map(expr(counters, _)._2))
+              case (txt: Scalar.Text, mbBody) =>
+                (txt, mbBody.map(expr(counters, _)._2))
+              case (E.Var(v), mbBody) =>
+                val (newCounters, newV) = bumpVar(counters, v)
+                (E.Var(newV), mbBody.map(expr(newCounters, _)._2))
+            }
+          )
       )
-    case E.Do(p) => E.Do(program(counters, p))
+    case E.Do(p0) =>
+      var newProgram: List[Expr] = List.empty
+      for (e <- p0) {
+
+      }
+      E.Do(ImmArray(newProgram.reverse: _*))
     case pop: PrimOp => pop
     case scalar: Scalar => scalar
   }
@@ -106,5 +111,5 @@ object NoShadowing {
   }
 
   def apply(p: Program): Program = program(Map.empty, p)
-   */
 }
+*/

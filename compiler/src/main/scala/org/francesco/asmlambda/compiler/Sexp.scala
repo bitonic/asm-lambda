@@ -167,16 +167,16 @@ final private class Reader(input: String, allowDollarInIdentifier: Boolean = fal
     }
   }
 
-  def close(acceptedKind: SeqKind): Unit = {
+  def close(acceptedKinds: SeqKind*): Unit = {
     context match {
       case Nil =>
-        fail(s"Got closing character for one of ${acceptedKind.name} at the top level")
+        fail(s"Got closing character for one of ${acceptedKinds.map(_.name).mkString(",")} at the top level")
       case (kind, els) :: rest =>
-        if (acceptedKind == kind) {
+        if (acceptedKinds.contains(kind)) {
           context = rest
           push(Sexp.Seq(kind, els.result()))
         } else {
-          fail(s"Got closing character for ${acceptedKind.name}, but I am in a ${kind.name}")
+          fail(s"Got closing character for ${acceptedKinds.map(_.name).mkString(",")}, but I am in a ${kind.name}")
         }
     }
   }
@@ -362,18 +362,26 @@ final private class Reader(input: String, allowDollarInIdentifier: Boolean = fal
           enter(SeqKind.List)
         case ')' =>
           close(SeqKind.List)
+        case '#' =>
+          if (cursor < input.length) {
+            val nextCh = input.charAt(cursor)
+            cursor += 1
+            if (nextCh == '[') {
+              enter(SeqKind.Vector)
+            } else {
+              fail(s"Expected [ after #, but got $nextCh")
+            }
+          } else {
+            fail(s"Expected [ after #, but got end of input")
+          }
         case '[' =>
-          enter(SeqKind.Vector)
+          enter(SeqKind.Pair)
         case ']' =>
-          close(SeqKind.Vector)
+          close(SeqKind.Pair, SeqKind.Vector)
         case '{' =>
           enter(SeqKind.Map)
         case '}' =>
           close(SeqKind.Map)
-        case '<' =>
-          enter(SeqKind.Pair)
-        case '>' =>
-          close(SeqKind.Pair)
         case '"' =>
           cursor -= 1
           push(Sexp.Scalar(Scalar.Text(string())))
@@ -394,7 +402,7 @@ final private class Reader(input: String, allowDollarInIdentifier: Boolean = fal
               case SeqKind.List => ')'
               case SeqKind.Vector => ']'
               case SeqKind.Map => '}'
-              case SeqKind.Pair => '>'
+              case SeqKind.Pair => ']'
             }
         }.mkString
         fail(s"Unexpected end of input, still need to close $toClose")

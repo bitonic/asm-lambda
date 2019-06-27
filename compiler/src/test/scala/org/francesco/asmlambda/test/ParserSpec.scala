@@ -3,6 +3,7 @@ package org.francesco.asmlambda.test
 import org.francesco.asmlambda.compiler.{ImmArray, Parser, Reader, Sexp}
 import org.francesco.asmlambda.compiler.Syntax._
 import org.francesco.asmlambda.compiler.{ImmArray => IA}
+import org.francesco.asmlambda.compiler.ValueOps._
 
 import scala.language.implicitConversions
 import org.scalatest.{FreeSpec, Matchers, Assertion}
@@ -42,11 +43,11 @@ class ParserSpec extends FreeSpec with Matchers {
     }
 
     "bool" in {
-      "[true false]" shouldBeExpr vec(true, false)
+      "#[true false]" shouldBeExpr vec(true, false)
     }
 
     "nil" in {
-      "()" shouldBeExpr nil
+      "[]" shouldBeExpr nil
     }
 
     "string" in {
@@ -74,50 +75,44 @@ class ParserSpec extends FreeSpec with Matchers {
     }
 
     "vec (0)" in {
-      "[]" shouldBeExpr vec()
+      "#[]" shouldBeExpr vec()
     }
 
     "vec (1)" in {
-      "[one]" shouldBeExpr vec("one")
+      "#[one]" shouldBeExpr vec("one")
     }
 
     "vec (2)" in {
-      "[one two]" shouldBeExpr vec("one", "two")
+      "#[one two]" shouldBeExpr vec("one", "two")
     }
 
     "mixed" in {
       val data =
         """
           {
-            1 [foo true ()],
-            {:blah false} (),
-            [something] {something-else 42},
+            1 #[foo true []],
+            #[something] {something-else 42},
           }
         """
       data shouldBeExpr
         map(
           (1, vec("foo", true, nil)),
-          (map((sym("blah"), false)), nil),
           (vec("something"), map(("something-else", 42)))
         )
     }
   }
 
-  "set!" in {
-    "(set! blah 42)" shouldBeExpr `set!`("blah", 42)
-  }
-
   "lambda" - {
     "no args, no body" in {
-      "(fn [])" shouldBeExpr lam(IA.empty)
+      "(fn [])" shouldBeExpr lam(IA())
     }
 
     "no args, body" in {
-      "(fn [] one two three)" shouldBeExpr lam(IA.empty, expr("one"), expr("two"), expr("three"))
+      "(fn [] one two three)" shouldBeExpr lam(IA(), "one", "two", "three")
     }
 
     "3 args" in {
-      "(fn [a b c] :blaaaa)" shouldBeExpr lam(IA("a", "b", "c"), expr(sym("blaaaa")))
+      """(fn [a b c] "blaaaa")""" shouldBeExpr lam(IA("a", "b", "c"), str("blaaaa"))
     }
   }
 
@@ -125,23 +120,63 @@ class ParserSpec extends FreeSpec with Matchers {
     val e =
       """
         (switch some-expr
-          [:symbol 1-one]
-          [123] ; nothing
-          [v (do da da da)])
+          123 [] ; nothing
+          v (do da da da))
       """
     e shouldBeExpr
         switch(
           "some-expr",
-          caseSym("symbol", Some("1-one")),
-          caseI64(123),
-          caseVar("v", Some(`do`(expr("da"), expr("da"), expr("da")))))
+          caseI64(123, nil),
+          caseVar("v", `do`("da", "da", "da")))
   }
 
-  "mutual" in {
-    "(mutual (def foo [] (bar)) (def bar [] (foo)))" shouldBeProgram
-      mkProgram(Form.mkDefs(
-        Def("foo", ImmArray.empty, mkProgram(Form.Expr(app("bar")))),
-        Def("bar", ImmArray.empty, mkProgram(Form.Expr(app("foo")))),
-      ))
+  "if" - {
+    "no else case" in {
+      """(if cond then)""" shouldBeExpr `if`("cond", "then")
+    }
+
+    "with else case" in {
+      """(if cond then else)""" shouldBeExpr `if`("cond", "then", Some("else"))
+    }
+  }
+
+  "application" - {
+    "0 args" in {
+      """(f)""" shouldBeExpr app("f")
+    }
+
+    "1 arg" in {
+      """(f x)""" shouldBeExpr app("f", "x")
+    }
+
+    "2 args" in {
+      """(f x y)""" shouldBeExpr app("f", "x", "y")
+    }
+  }
+
+  "program" in {
+    """
+      (let x)
+      (+ 1 2)
+      (let y y-body-1)
+      (def f [] f-step-1 f-step-2)
+      (let z z-body-1 z-body-2)
+      (def g [a])
+      (def h [a b] h-step-1)
+      "Hello World!"
+    """ shouldBeProgram mkProgram(
+      let("x"),
+      Form.Expr(app(PrimOp.Add, 1, 2)),
+      let("y", "y-body-1"),
+      defs(
+        `def`("f", IA(), "f-step-1", "f-step-2")
+      ),
+      let("z", "z-body-1", "z-body-2"),
+      defs(
+        `def`("g", IA("a")),
+        `def`("h", IA("a", "b"), "h-step-1"),
+      ),
+      Form.Expr(str("Hello World!")),
+    )
   }
 }

@@ -1,13 +1,13 @@
 package org.francesco.asmlambda.test
 
 import org.francesco.asmlambda.compiler.{ImmArray, Parser, Reader, Sexp}
-import org.francesco.asmlambda.compiler.Syntax.Program
-import org.francesco.asmlambda.compiler.NoShadowing
+// import org.francesco.asmlambda.compiler.NoShadowing
 
 import scala.language.implicitConversions
 import org.scalatest.{FreeSpec, Matchers, Assertion}
 
 class NoShadowingSpec extends FreeSpec with Matchers {
+  /*
   implicit def stringSexps(s: String): ImmArray[Sexp] = Reader(s, true)
   implicit def stringProgram(s: String): Program = Parser.program(stringSexps(s).iterator)
 
@@ -58,4 +58,5 @@ class NoShadowingSpec extends FreeSpec with Matchers {
         (def foo$1 [] (bar)))
     """
   }
+   */
 }

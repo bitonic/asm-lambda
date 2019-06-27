@@ -32,7 +32,7 @@ public final class Value {
     CLOSE_BRACE,
     CLOSE_BRACKET,
     CLOSE_PARENS,
-    CLOSE_ANGLE
+    CLOSE_PIPE
   }
 
   /**
@@ -55,7 +55,7 @@ public final class Value {
           var value = values.pop();
 
           if (value == null) {
-            stringBuilder.append("<>");
+            stringBuilder.append("[]");
           } else if (value instanceof Long) {
             stringBuilder.append(value);
           } else if (value instanceof Double) {
@@ -66,14 +66,14 @@ public final class Value {
             stringBuilder.append(value);
           } else if (value instanceof Pair) {
             Pair pair = (Pair) value;
-            stringBuilder.append("<");
-            instructions.push(ToTextInstruction.CLOSE_ANGLE);
+            stringBuilder.append("[");
+            instructions.push(ToTextInstruction.CLOSE_BRACKET);
             values.push(pair.snd);
             instructions.push(ToTextInstruction.SPACE);
             values.push(pair.fst);
           } else if (value instanceof Object[]) {
             Object[] vec = (Object[]) value;
-            stringBuilder.append("[");
+            stringBuilder.append("#[");
             instructions.push(ToTextInstruction.CLOSE_BRACKET);
             boolean first = true;
             for (int i = vec.length - 1; i >= 0; i--) {
@@ -120,8 +120,6 @@ public final class Value {
         case CLOSE_BRACKET:
           stringBuilder.append("]");
           break;
-        case CLOSE_ANGLE:
-          stringBuilder.append(">");
         case COMMA:
           stringBuilder.append(", ");
           break;
