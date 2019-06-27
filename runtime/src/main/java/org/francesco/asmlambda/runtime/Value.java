@@ -12,7 +12,7 @@ import java.util.*;
  * * Bool => {@link Boolean}
  * * Pair => {@link Pair}
  * * Vector => {@link Object[]}
- * * Map => {@link HashMap}
+ * * Map => {@link StringHAMT}
  * * functions => {@link Functions.Function}
  *
  * Generally speaking we _do not_ define our own classes for values, as you can see above.
@@ -31,8 +31,7 @@ public final class Value {
     SPACE,
     CLOSE_BRACE,
     CLOSE_BRACKET,
-    CLOSE_PARENS,
-    CLOSE_PIPE
+    CLOSE_PARENS
   }
 
   /**
@@ -85,11 +84,11 @@ public final class Value {
               instructions.push(ToTextInstruction.VALUE);
               values.push(vec[i]);
             }
-          } else if (value instanceof HashMap) {
-            HashMap rec = (HashMap) value;
+          } else if (value instanceof StringHAMT) {
+            StringHAMT rec = (StringHAMT) value;
             stringBuilder.append("{");
             instructions.push(ToTextInstruction.CLOSE_BRACE);
-            Object[] keys = rec.keySet().toArray(new Object[0]);
+            String[] keys = rec.keys();
             boolean first = true;
             for (int i = keys.length - 1; i >= 0; i--) {
               var k = keys[i];
@@ -216,13 +215,13 @@ public final class Value {
           left.push(arr1[i]);
           right.push(arr2[i]);
         }
-      } else if (l instanceof HashMap && r instanceof HashMap) {
-        var rec1 = (HashMap) l;
-        var rec2 = (HashMap) r;
+      } else if (l instanceof StringHAMT && r instanceof StringHAMT) {
+        var rec1 = (StringHAMT) l;
+        var rec2 = (StringHAMT) r;
         if (rec1.size() != rec2.size()) {
           return false;
         }
-        for (Object k : rec1.keySet()) {
+        for (String k : rec1.keys()) {
           var v1 = rec1.get(k);
           var v2 = rec2.get(k);
           if (v2 != null) {
@@ -259,29 +258,41 @@ public final class Value {
   }
 
   public static Object mapPut(Object map0, Object k0, Object v) {
-    if (!(map0 instanceof StringHAMT)) {
-      throw new RuntimeException("Can't call mapPut on value of type " + map0.getClass());
+    if (!(map0 instanceof StringHAMT) || !(k0 instanceof String)) {
+      throw new RuntimeException("Can't call mapPut on value of types " + map0.getClass() + " and " + k0.getClass());
     }
     StringHAMT map = (StringHAMT) map0;
-    if (!(k0 instanceof String)) {
-      throw new RuntimeException("Can't call mapPut on key of type " + k0.getClass());
-    }
     String k = (String) k0;
 
     return map.put(k, v);
   }
 
   public static Object mapGet(Object map0, Object k0) {
-    if (!(map0 instanceof StringHAMT)) {
-      throw new RuntimeException("Can't call mapGet on value of type " + map0.getClass());
+    if (!(map0 instanceof StringHAMT) || !(k0 instanceof String)) {
+      throw new RuntimeException("Can't call mapGet on value of types " + map0.getClass() + " and " + k0.getClass());
     }
     StringHAMT map = (StringHAMT) map0;
-    if (!(k0 instanceof String)) {
-      throw new RuntimeException("Can't call mapGet on key of type " + k0.getClass());
-    }
     String k = (String) k0;
 
     return map.get(k);
+  }
+
+  public static Object mapRemove(Object map0, Object k0) {
+    if (!(map0 instanceof StringHAMT) || !(k0 instanceof String)) {
+      throw new RuntimeException("Can't call mapRemove on value of types " + map0.getClass() + " and " + k0.getClass());
+    }
+    StringHAMT map = (StringHAMT) map0;
+    String k = (String) k0;
+
+    return map.remove(k);
+  }
+
+  public static Object mapSize(Object map0) {
+    if (!(map0 instanceof StringHAMT)) {
+      throw new RuntimeException("Can't call mapSize on value of type " + map0.getClass());
+    }
+    StringHAMT map = (StringHAMT) map0;
+    return map.size();
   }
 
   public static Object add(Object e1, Object e2) {

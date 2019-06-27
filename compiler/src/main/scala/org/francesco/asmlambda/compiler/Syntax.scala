@@ -82,6 +82,9 @@ object Syntax {
     case object MapPut extends PrimOp {
       val arity = Fixed(3) // (Map, Any, Any) -> Any
     }
+    case object MapRemove extends PrimOp {
+      val arity = Fixed(2) // (Map, Any) -> Any
+    }
     case object PairFst extends PrimOp {
       val arity = Fixed(1) // (Pair) -> Any
     }

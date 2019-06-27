@@ -25,6 +25,7 @@ object Parser {
     "map-keys" -> PrimOp.MapKeys,
     "map-get" -> PrimOp.MapGet,
     "map-put" -> PrimOp.MapPut,
+    "map-remove" -> PrimOp.MapRemove,
     "vec-new" -> PrimOp.VectorNew,
     "vec-get" -> PrimOp.VectorGet,
     "vec-len" -> PrimOp.VectorLen,

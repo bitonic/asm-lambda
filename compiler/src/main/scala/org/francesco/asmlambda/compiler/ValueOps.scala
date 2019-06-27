@@ -14,9 +14,9 @@ object ValueOps {
   implicit def stringValue(s: String): WrappedValue = WrappedValue(s)
   implicit def arrayValue(v: Array[WrappedValue]): WrappedValue = WrappedValue(v.map(_.value))
   implicit def mapValue(v: Map[String, WrappedValue]): WrappedValue = {
-    val map = Value.mapNew()
+    var map = Value.mapNew()
     for (entry <- v) {
-      Value.mapPut(map, entry._1, entry._2.value)
+      map = Value.mapPut(map, entry._1, entry._2.value)
     }
     WrappedValue(map)
   }

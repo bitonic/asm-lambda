@@ -22,7 +22,6 @@ class ValueSpec extends FreeSpec with Matchers {
           "\"BEGIN \\\" \\\\ \\n \\t \\u0000 \\uDCAB \\u0012 END\""
     }
 
-    /*
     "Map" - {
       "0" in {
         toText(map()) shouldBe "{}"
@@ -39,10 +38,9 @@ class ValueSpec extends FreeSpec with Matchers {
       "nested" in {
         toText(
           map(("42 false", vec(1, map(("bar", 1), ("baz", 2)), 2)), ("blah", vec(nil, 56.65)))) shouldBe
-          """{"42 false" [1 {"bar" 1, "baz" 2} 2], "blah" [() 56.65]}"""
+          """{"42 false" #[1 {"bar" 1, "baz" 2} 2], "blah" #[[] 56.65]}"""
       }
     }
-    */
 
     "vector" - {
       "0" in {
